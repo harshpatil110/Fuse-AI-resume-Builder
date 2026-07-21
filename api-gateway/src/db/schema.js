@@ -3,7 +3,9 @@ import { pgTable, serial, text, timestamp, jsonb, integer } from 'drizzle-orm/pg
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   email: text('email').notNull(),
-  githubId: text('github_id'),
+  githubId: text('github_id').unique(),
+  githubUsername: text('github_username'),
+  accessToken: text('access_token'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

@@ -1,0 +1,53 @@
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
+import uvicorn
+import os
+import shutil
+from uuid import uuid4
+
+app = FastAPI(title="Fuse AI Engine")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+TEMP_UPLOADS_DIR = "temp_uploads"
+os.makedirs(TEMP_UPLOADS_DIR, exist_ok=True)
+
+@app.post("/process-resume")
+async def process_resume(
+    resume: UploadFile = File(...),
+    jd_file: Optional[UploadFile] = File(None),
+    jd_text: Optional[str] = Form(None)
+):
+    if not jd_file and not jd_text:
+        raise HTTPException(status_code=400, detail="Either jd_file or jd_text must be provided.")
+
+    resume_filename = f"{uuid4()}_{resume.filename}"
+    resume_path = os.path.join(TEMP_UPLOADS_DIR, resume_filename)
+    
+    with open(resume_path, "wb") as f:
+        shutil.copyfileobj(resume.file, f)
+
+    jd_filename = None
+    if jd_file:
+        jd_filename = f"{uuid4()}_{jd_file.filename}"
+        jd_path = os.path.join(TEMP_UPLOADS_DIR, jd_filename)
+        with open(jd_path, "wb") as f:
+            shutil.copyfileobj(jd_file.file, f)
+
+    return {
+        "status": "success",
+        "message": "Files received successfully",
+        "resume_filename": resume_filename,
+        "jd_filename": jd_filename,
+        "has_jd_text": jd_text is not None
+    }
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
