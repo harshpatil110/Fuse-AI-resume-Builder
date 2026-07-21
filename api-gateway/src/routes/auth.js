@@ -36,6 +36,7 @@ router.get('/github/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token;
     
     if (!accessToken) {
+      console.error('Failed to obtain access token. Response data:', tokenResponse.data);
       return res.status(400).send('Failed to obtain access token');
     }
 
@@ -88,7 +89,7 @@ router.get('/github/callback', async (req, res) => {
       </html>
     `);
   } catch (error) {
-    console.error('Error during GitHub OAuth:', error);
+    console.error('Error during GitHub OAuth:', error.response?.data || error.message);
     res.status(500).send('Authentication failed');
   }
 });

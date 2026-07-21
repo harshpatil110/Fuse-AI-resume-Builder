@@ -26,7 +26,7 @@ export const jobDescriptions = pgTable('job_descriptions', {
 
 export const githubProfiles = pgTable('github_profiles', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull().unique(),
   repoData: jsonb('repo_data'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

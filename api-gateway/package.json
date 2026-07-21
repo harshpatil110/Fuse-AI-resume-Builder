@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "generate": "drizzle-kit generate",
-    "push": "drizzle-kit push"
+    "push": "drizzle-kit push",
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
   },
   "keywords": [],
   "author": "",
