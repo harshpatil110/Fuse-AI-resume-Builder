@@ -327,3 +327,28 @@ class PDFHandler:
         except Exception as e:
             logger.error(f"❌ Error creating JSONResume object: {e}")
             return None
+
+def extract_resume_data(file_path: str) -> dict:
+    """Unified entry-point function for the FastAPI app to extract and chunk PDF data."""
+    try:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"PDF file not found: {file_path}")
+
+        with pymupdf.open(file_path) as doc:
+            pages = range(doc.page_count)
+            resume_text = to_markdown(
+                doc,
+                pages=pages,
+            )
+            # Break markdown text into chunks (e.g. by paragraphs/sections)
+            chunks = [chunk.strip() for chunk in resume_text.split("\n\n") if chunk.strip()]
+            
+            return {
+                "raw_text": resume_text,
+                "pages": doc.page_count,
+                "metadata": doc.metadata,
+                "chunks": chunks
+            }
+    except Exception as e:
+        logger.error(f"An error occurred while reading the PDF: {e}")
+        raise e

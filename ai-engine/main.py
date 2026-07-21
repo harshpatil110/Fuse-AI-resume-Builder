@@ -5,6 +5,7 @@ import uvicorn
 import os
 import shutil
 from uuid import uuid4
+from pdf import extract_resume_data
 
 app = FastAPI(title="Fuse AI Engine")
 
@@ -34,6 +35,11 @@ async def process_resume(
     with open(resume_path, "wb") as f:
         shutil.copyfileobj(resume.file, f)
 
+    try:
+        extracted_data = extract_resume_data(resume_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to extract resume data: {str(e)}")
+
     jd_filename = None
     if jd_file:
         jd_filename = f"{uuid4()}_{jd_file.filename}"
@@ -46,7 +52,8 @@ async def process_resume(
         "message": "Files received successfully",
         "resume_filename": resume_filename,
         "jd_filename": jd_filename,
-        "has_jd_text": jd_text is not None
+        "has_jd_text": jd_text is not None,
+        "extracted_data": extracted_data
     }
 
 if __name__ == "__main__":
