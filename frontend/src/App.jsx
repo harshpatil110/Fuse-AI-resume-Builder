@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Upload from './pages/Upload';
 import Editor from './pages/Editor';
+import ResumeEditor from './pages/ResumeEditor';
 import Settings from './pages/Settings';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/editor" element={<Editor />} />
+          <Route path="/resume-editor" element={<ResumeEditor />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/" element={<Navigate to="/upload" replace />} />
           <Route path="*" element={<Navigate to="/upload" replace />} />
