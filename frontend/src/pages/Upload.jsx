@@ -96,7 +96,9 @@ export default function Upload() {
       navigate('/editor', { state: { criticData: data } });
     } catch (err) {
       console.error("❌ UPLOAD API ERROR:", err);
-      setError(err.message || 'An unexpected error occurred.');
+      const errMsg = err.message || 'An unexpected error occurred.';
+      setError(errMsg);
+      alert(errMsg);
     } finally {
       setIsAnalyzing(false);
     }

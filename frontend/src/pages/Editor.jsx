@@ -94,9 +94,10 @@ export default function Editor() {
   console.log("📥 RECEIVED STATE IN EDITOR:", location.state);
   
   const criticData = location.state?.criticData?.critique || location.state?.criticData;
+  const rawData = location.state?.criticData || {};
   
   const [critique] = useState(criticData || MOCK_CRITIQUE);
-  const [resumeSections] = useState(MOCK_RESUME_SECTIONS);
+  const [resumeSections] = useState(rawData.parsed_resume || rawData.parsedResume || MOCK_RESUME_SECTIONS);
 
   if (!critique || Object.keys(critique).length === 0) {
     return (
@@ -146,6 +147,12 @@ export default function Editor() {
 
   return (
     <div>
+      {/* RAW BACKEND DUMP - DEBUGGING ONLY */}
+      <div className="bg-stone-900 text-green-400 p-4 mb-8 rounded-sm overflow-x-auto text-xs font-mono">
+        <p className="text-white mb-2 font-bold uppercase tracking-widest">--- Raw Backend State Dump ---</p>
+        <pre>{JSON.stringify(location.state, null, 2)}</pre>
+      </div>
+
       {/* Header */}
       <div className="mb-10">
         <p className="text-xs font-medium tracking-widest uppercase text-stone-400 mb-4">
