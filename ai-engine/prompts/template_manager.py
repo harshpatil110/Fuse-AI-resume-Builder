@@ -47,6 +47,7 @@ class TemplateManager:
             "resume_evaluation_system_message": "resume_evaluation_system_message.jinja",
             "critic_agent": "critic_agent.jinja",
             "github_matching_agent": "github_matching_agent.jinja",
+            "writer_agent": "writer_agent.jinja",
         }
 
         for section_name, filename in template_files.items():

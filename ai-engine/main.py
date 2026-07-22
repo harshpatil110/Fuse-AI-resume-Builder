@@ -7,7 +7,7 @@ import os
 import shutil
 from uuid import uuid4
 from pdf import extract_resume_data
-from agents import run_critic_agent, run_github_matching_agent
+from agents import run_critic_agent, run_github_matching_agent, run_writer_agent
 
 app = FastAPI(title="Fuse AI Engine")
 
@@ -31,6 +31,12 @@ class CriticRequest(BaseModel):
 class GithubMatchRequest(BaseModel):
     github_repos: list
     jd_text: str
+
+
+class WriterRequest(BaseModel):
+    parsed_resume: Dict[str, Any]
+    jd_text: str
+    selected_github_projects: Dict[str, Any]
 
 
 @app.post("/process-resume")
@@ -98,6 +104,25 @@ async def match_github(request: GithubMatchRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GitHub Matching Agent failed: {str(e)}")
+
+
+@app.post("/api/rewrite-resume")
+async def rewrite_resume(request: WriterRequest):
+    """Run the Writer Agent to produce a fully rewritten, JD-optimized resume."""
+    try:
+        rewritten = await run_writer_agent(
+            request.parsed_resume,
+            request.jd_text,
+            request.selected_github_projects
+        )
+        return {
+            "status": "success",
+            "rewritten_resume": rewritten
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Writer Agent failed: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -78,3 +78,38 @@ async def run_github_matching_agent(github_repos: list, jd_text: str) -> dict:
     logger.info(f"GitHub Matching Agent selected {len(result.get('selected_projects', []))} projects.")
 
     return result
+
+
+async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_projects: dict) -> dict:
+    """
+    Run the Writer Agent to produce a fully rewritten, JD-optimized resume.
+
+    Args:
+        parsed_resume: The candidate's original parsed resume data.
+        jd_text: The raw Job Description text.
+        selected_github_projects: The output from the GitHub Matching Agent.
+
+    Returns:
+        A dictionary representing the final rewritten resume in JSON Resume format.
+    """
+    system_message = (
+        "You are an Elite Career Consultant and Senior Technical Resume Writer. "
+        "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
+        "Never include markdown formatting, code fences, or conversational text."
+    )
+
+    prompt = template_manager.render_template(
+        "writer_agent",
+        parsed_resume=json.dumps(parsed_resume, indent=2),
+        jd_text=jd_text,
+        selected_github_projects=json.dumps(selected_github_projects, indent=2),
+    )
+
+    if prompt is None:
+        raise ValueError("Failed to render writer_agent template.")
+
+    logger.info("Running Writer Agent...")
+    result = generate_completion(prompt, system_message)
+    logger.info("Writer Agent finished. Resume rewrite complete.")
+
+    return result
