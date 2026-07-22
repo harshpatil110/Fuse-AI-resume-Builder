@@ -7,7 +7,7 @@ import os
 import shutil
 from uuid import uuid4
 from pdf import extract_resume_data
-from agents import run_critic_agent
+from agents import run_critic_agent, run_github_matching_agent
 
 app = FastAPI(title="Fuse AI Engine")
 
@@ -25,6 +25,11 @@ os.makedirs(TEMP_UPLOADS_DIR, exist_ok=True)
 
 class CriticRequest(BaseModel):
     resume_data: Dict[str, Any]
+    jd_text: str
+
+
+class GithubMatchRequest(BaseModel):
+    github_repos: list
     jd_text: str
 
 
@@ -78,6 +83,21 @@ async def criticize_resume(request: CriticRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Critic Agent failed: {str(e)}")
+
+
+@app.post("/api/match-github")
+async def match_github(request: GithubMatchRequest):
+    """Run the GitHub Matching Agent to select the most relevant repos."""
+    try:
+        matches = await run_github_matching_agent(request.github_repos, request.jd_text)
+        return {
+            "status": "success",
+            "matches": matches
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GitHub Matching Agent failed: {str(e)}")
 
 
 if __name__ == "__main__":

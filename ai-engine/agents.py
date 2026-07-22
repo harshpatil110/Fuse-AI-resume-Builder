@@ -45,3 +45,36 @@ async def run_critic_agent(resume_json: dict, jd_text: str) -> dict:
     logger.info(f"Critic Agent finished. Match score: {result.get('overall_match_score', 'N/A')}")
 
     return result
+
+
+async def run_github_matching_agent(github_repos: list, jd_text: str) -> dict:
+    """
+    Run the GitHub Matching Agent to select the most relevant repos for a JD.
+
+    Args:
+        github_repos: List of repository dicts (name, readme, commits, etc.).
+        jd_text: The raw Job Description text.
+
+    Returns:
+        A dictionary containing the selected projects and match reasoning.
+    """
+    system_message = (
+        "You are a Principal Engineering Manager at a top-tier tech company. "
+        "You analyze GitHub portfolios against job descriptions and return ONLY valid JSON. "
+        "Never include markdown formatting, code fences, or conversational text."
+    )
+
+    prompt = template_manager.render_template(
+        "github_matching_agent",
+        github_repos=json.dumps(github_repos, indent=2),
+        jd_text=jd_text,
+    )
+
+    if prompt is None:
+        raise ValueError("Failed to render github_matching_agent template.")
+
+    logger.info("Running GitHub Matching Agent...")
+    result = generate_completion(prompt, system_message)
+    logger.info(f"GitHub Matching Agent selected {len(result.get('selected_projects', []))} projects.")
+
+    return result
