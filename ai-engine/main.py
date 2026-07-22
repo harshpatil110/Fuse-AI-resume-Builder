@@ -7,7 +7,7 @@ import os
 import shutil
 from uuid import uuid4
 from pdf import extract_resume_data
-from agents import run_critic_agent, run_github_matching_agent, run_writer_agent
+from agents import run_critic_agent, run_github_matching_agent, generate_and_qa_resume
 
 app = FastAPI(title="Fuse AI Engine")
 
@@ -108,21 +108,25 @@ async def match_github(request: GithubMatchRequest):
 
 @app.post("/api/rewrite-resume")
 async def rewrite_resume(request: WriterRequest):
-    """Run the Writer Agent to produce a fully rewritten, JD-optimized resume."""
+    """Run the Writer Agent with QA grading loop to produce a high-quality resume."""
     try:
-        rewritten = await run_writer_agent(
+        result = await generate_and_qa_resume(
             request.parsed_resume,
             request.jd_text,
             request.selected_github_projects
         )
         return {
             "status": "success",
-            "rewritten_resume": rewritten
+            "rewritten_resume": result["resume"],
+            "qa_score": result["score"],
+            "qa_feedback": result["feedback"],
+            "qa_attempts": result["attempts"],
+            "passed_qa": result["passed_qa"],
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Writer Agent failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Resume generation failed: {str(e)}")
 
 
 if __name__ == "__main__":

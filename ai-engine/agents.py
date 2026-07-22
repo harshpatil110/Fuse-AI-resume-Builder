@@ -117,3 +117,131 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
     logger.info("Writer Agent finished. Resume rewrite complete.")
 
     return result
+
+
+async def run_writer_agent_with_feedback(
+    parsed_resume: dict,
+    jd_text: str,
+    selected_github_projects: dict,
+    previous_feedback: str = None
+) -> dict:
+    """
+    Run the Writer Agent, optionally injecting evaluator feedback from a previous attempt.
+    """
+    system_message = (
+        "You are an Elite Career Consultant and Senior Technical Resume Writer. "
+        "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
+        "Never include markdown formatting, code fences, or conversational text."
+    )
+
+    feedback_block = ""
+    if previous_feedback:
+        feedback_block = (
+            f"\n\n<PREVIOUS_EVALUATION_FEEDBACK>\n"
+            f"Your previous resume draft scored below the quality threshold. "
+            f"The evaluator provided the following feedback. You MUST address every point:\n"
+            f"{previous_feedback}\n"
+            f"</PREVIOUS_EVALUATION_FEEDBACK>"
+        )
+
+    prompt = template_manager.render_template(
+        "writer_agent",
+        parsed_resume=json.dumps(parsed_resume, indent=2),
+        jd_text=jd_text,
+        selected_github_projects=json.dumps(selected_github_projects, indent=2),
+    )
+
+    if prompt is None:
+        raise ValueError("Failed to render writer_agent template.")
+
+    # Append feedback block after the template content
+    prompt += feedback_block
+
+    logger.info(f"Running Writer Agent {'(with feedback)' if previous_feedback else '(initial attempt)'}...")
+    result = generate_json_completion(prompt, system_message)
+    logger.info("Writer Agent finished.")
+
+    return result
+
+
+async def generate_and_qa_resume(
+    parsed_resume: dict,
+    jd_text: str,
+    selected_github_projects: dict
+) -> dict:
+    """
+    Master orchestration function: Generate a resume and grade it in a QA loop.
+
+    1. Calls the Writer Agent to produce a resume.
+    2. Evaluates the resume against the JD.
+    3. If score >= QA_SCORE_THRESHOLD, returns immediately.
+    4. If score < threshold, feeds feedback back into Writer Agent and retries.
+    5. Maximum of QA_MAX_RETRIES additional attempts (total = 1 initial + 2 retries).
+    6. Returns the best resume generated across all attempts.
+
+    Returns:
+        Dictionary with 'resume', 'score', 'feedback', and 'attempts' keys.
+    """
+    best_resume = None
+    best_score = -1
+    best_feedback = ""
+    previous_feedback = None
+
+    total_attempts = 1 + QA_MAX_RETRIES  # 1 initial + 2 retries = 3 max
+
+    for attempt in range(1, total_attempts + 1):
+        logger.info(f"QA Loop — Attempt {attempt}/{total_attempts}")
+
+        # Generate resume (with feedback on retries)
+        if attempt == 1:
+            generated_resume = await run_writer_agent(
+                parsed_resume, jd_text, selected_github_projects
+            )
+        else:
+            generated_resume = await run_writer_agent_with_feedback(
+                parsed_resume, jd_text, selected_github_projects, previous_feedback
+            )
+
+        # Evaluate the generated resume
+        evaluation = evaluate_resume(generated_resume, jd_text)
+        score = evaluation.get("score", 0)
+        feedback = evaluation.get("feedback", "")
+
+        logger.info(f"QA Loop — Attempt {attempt} scored {score}/100")
+
+        # Track the best result
+        if score > best_score:
+            best_score = score
+            best_resume = generated_resume
+            best_feedback = feedback
+
+        # If score meets threshold, return immediately
+        if score >= QA_SCORE_THRESHOLD:
+            logger.info(f"QA Loop — Score {score} meets threshold ({QA_SCORE_THRESHOLD}). Returning.")
+            return {
+                "resume": generated_resume,
+                "score": score,
+                "feedback": feedback,
+                "attempts": attempt,
+                "passed_qa": True,
+            }
+
+        # Otherwise, set feedback for next iteration
+        missing = evaluation.get("missing_keywords", [])
+        previous_feedback = feedback
+        if missing:
+            previous_feedback += f" Missing keywords: {', '.join(missing)}."
+
+        logger.warning(f"QA Loop — Score {score} below threshold. Feedback: {feedback}")
+
+    # All retries exhausted — return the best attempt
+    logger.warning(
+        f"QA Loop — Max retries exhausted. Returning best resume (score: {best_score})."
+    )
+    return {
+        "resume": best_resume,
+        "score": best_score,
+        "feedback": best_feedback,
+        "attempts": total_attempts,
+        "passed_qa": False,
+    }
