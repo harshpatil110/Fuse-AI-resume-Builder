@@ -1,13 +1,162 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { UploadCloud, FileText, CheckCircle, X } from 'lucide-react';
 
-export default function Upload() {
+function DropZone({ label, hint, accept, file, onDrop, onClear }) {
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: (accepted) => {
+      if (accepted.length > 0) onDrop(accepted[0]);
+    },
+    accept,
+    multiple: false,
+  });
+
   return (
     <div>
-      <p className="text-xs font-medium tracking-widest uppercase text-stone-400 mb-4">Step 1</p>
-      <h1 className="text-4xl font-bold tracking-tight text-stone-900 mb-3">Upload</h1>
-      <p className="text-base font-normal leading-relaxed text-stone-500 max-w-[65ch]">
-        Provide your current resume and the target job description. The AI engine will analyze both to begin alignment.
+      <p className="text-xs font-medium tracking-widest uppercase text-stone-500 mb-3">
+        {label}
       </p>
+
+      {file ? (
+        <div className="bg-white border border-stone-200 p-8 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CheckCircle size={20} strokeWidth={1.5} className="text-green-600" />
+            <div>
+              <p className="text-sm font-medium text-stone-900">{file.name}</p>
+              <p className="text-xs text-stone-400 mt-0.5">
+                {(file.size / 1024).toFixed(1)} KB
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClear}
+            className="text-stone-400 hover:text-stone-700 transition-colors duration-300"
+          >
+            <X size={16} strokeWidth={1.5} />
+          </button>
+        </div>
+      ) : (
+        <div
+          {...getRootProps()}
+          className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors duration-200 ${
+            isDragActive
+              ? 'border-blue-300 bg-blue-50'
+              : 'border-stone-300 bg-transparent hover:border-blue-300 hover:bg-blue-50'
+          }`}
+        >
+          <input {...getInputProps()} />
+          <UploadCloud
+            size={32}
+            strokeWidth={1.5}
+            className="mx-auto mb-4 text-stone-400"
+          />
+          <p className="text-sm text-stone-600 mb-1">
+            {isDragActive ? 'Drop file here' : 'Drag & drop or click to browse'}
+          </p>
+          <p className="text-xs text-stone-400">{hint}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Upload() {
+  const [resumeFile, setResumeFile] = useState(null);
+  const [jdFile, setJdFile] = useState(null);
+  const [jdText, setJdText] = useState('');
+
+  const hasResume = !!resumeFile;
+  const hasJd = !!jdFile || jdText.trim().length > 0;
+  const canGenerate = hasResume && hasJd;
+
+  const handleGenerate = () => {
+    console.log('Resume File:', resumeFile);
+    console.log('JD File:', jdFile);
+    console.log('JD Text:', jdText);
+  };
+
+  return (
+    <div>
+      {/* Hero Section */}
+      <div className="mb-16">
+        <h1 className="text-5xl font-black tracking-tight text-stone-900 mb-4 leading-tight">
+          Align your experience.
+        </h1>
+        <p className="text-base font-normal leading-relaxed text-stone-500 max-w-[65ch]">
+          Upload your current resume and the target job description. The AI engine will analyze
+          both documents and generate an optimized, JD-aligned version of your resume.
+        </p>
+      </div>
+
+      {/* Upload Grid */}
+      <div className="grid md:grid-cols-2 gap-8 mb-12">
+        {/* Resume Dropzone */}
+        <DropZone
+          label="Resume"
+          hint="PDF only — max 10 MB"
+          accept={{ 'application/pdf': ['.pdf'] }}
+          file={resumeFile}
+          onDrop={setResumeFile}
+          onClear={() => setResumeFile(null)}
+        />
+
+        {/* JD Dropzone */}
+        <div>
+          <DropZone
+            label="Job Description"
+            hint="PDF or TXT"
+            accept={{
+              'application/pdf': ['.pdf'],
+              'text/plain': ['.txt'],
+            }}
+            file={jdFile}
+            onDrop={setJdFile}
+            onClear={() => setJdFile(null)}
+          />
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-stone-200" />
+            <span className="text-xs font-medium tracking-widest uppercase text-stone-400">
+              Or paste text
+            </span>
+            <div className="flex-1 h-px bg-stone-200" />
+          </div>
+
+          {/* JD Text Area */}
+          <textarea
+            value={jdText}
+            onChange={(e) => setJdText(e.target.value)}
+            placeholder="Paste the full job description here..."
+            rows={6}
+            className="w-full bg-white border border-stone-300 rounded-sm px-4 py-3 text-sm leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-blue-300 focus:border-blue-300 resize-none transition-all duration-300"
+          />
+        </div>
+      </div>
+
+      {/* Generate Button */}
+      <button
+        onClick={handleGenerate}
+        disabled={!canGenerate}
+        className={`bg-stone-900 text-white rounded-sm px-8 py-3 text-sm font-medium tracking-wide transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+          canGenerate
+            ? 'hover:bg-stone-700 cursor-pointer'
+            : 'opacity-40 cursor-not-allowed'
+        }`}
+      >
+        Generate
+      </button>
+
+      {/* Helper Text */}
+      {!canGenerate && (
+        <p className="text-xs text-stone-400 mt-3">
+          {!hasResume && !hasJd
+            ? 'Upload a resume and provide a job description to begin.'
+            : !hasResume
+            ? 'Upload your resume to continue.'
+            : 'Provide a job description to continue.'}
+        </p>
+      )}
     </div>
   );
 }
