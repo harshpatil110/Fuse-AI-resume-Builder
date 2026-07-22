@@ -6,6 +6,7 @@ import Upload from './pages/Upload';
 import Editor from './pages/Editor';
 import ResumeEditor from './pages/ResumeEditor';
 import Settings from './pages/Settings';
+import History from './pages/History';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/editor" element={<Editor />} />
           <Route path="/resume-editor" element={<ResumeEditor />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/history" element={<History />} />
           <Route path="/" element={<Navigate to="/upload" replace />} />
           <Route path="*" element={<Navigate to="/upload" replace />} />
         </Route>

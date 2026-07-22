@@ -118,3 +118,7 @@
 * Deploy the PostgreSQL database to Neon DB production.
 * Deploy the Node.js and Python microservices to a platform like Render, Railway, or AWS ECS.
 * Configure secure environment variables in production (GitHub OAuth Client ID/Secret, Nvidia NIM API Key, Database URIs).
+
+
+
+
