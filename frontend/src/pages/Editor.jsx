@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { AlertCircle, TrendingUp, XCircle, ArrowRight, CheckCircle, Sparkles } from 'lucide-react';
 
 // ── Mock Data ──
@@ -83,34 +84,39 @@ const MOCK_RESUME_SECTIONS = [
   },
 ];
 
-// ── Helpers ──
-const WEAK_PHRASES = MOCK_CRITIQUE.weak_verbs_found.map((v) => v.original);
-const IRRELEVANT_COMPANIES = MOCK_CRITIQUE.irrelevant_experience.map((e) =>
-  e.item.split('(')[0].trim().split(' at ').pop()?.trim()
-);
 
-function highlightText(text) {
-  for (const phrase of WEAK_PHRASES) {
-    if (text === phrase) {
-      return (
-        <span className="bg-blue-50 border-b-2 border-blue-200 text-stone-900 px-0.5">
-          {text}
-        </span>
-      );
-    }
-  }
-  return text;
-}
-
-function isIrrelevantSection(section) {
-  if (!section.company) return false;
-  return IRRELEVANT_COMPANIES.some((c) => section.company.includes(c));
-}
 
 // ── Component ──
 export default function Editor() {
-  const [critique] = useState(MOCK_CRITIQUE);
+  const location = useLocation();
+  const criticData = location.state?.criticData?.critique || location.state?.criticData;
+  
+  const [critique] = useState(criticData || MOCK_CRITIQUE);
   const [resumeSections] = useState(MOCK_RESUME_SECTIONS);
+
+  // Re-calculate derived arrays safely based on potentially live data
+  const weakPhrases = (critique.weak_verbs_found || []).map((v) => v.original);
+  const irrelevantCompanies = (critique.irrelevant_experience || []).map((e) =>
+    e.item.split('(')[0].trim().split(' at ').pop()?.trim()
+  );
+
+  const highlightText = (text) => {
+    for (const phrase of weakPhrases) {
+      if (text === phrase) {
+        return (
+          <span className="bg-blue-50 border-b-2 border-blue-200 text-stone-900 px-0.5">
+            {text}
+          </span>
+        );
+      }
+    }
+    return text;
+  };
+
+  const isIrrelevantSection = (section) => {
+    if (!section.company) return false;
+    return irrelevantCompanies.some((c) => section.company.includes(c));
+  };
 
   const scoreColor =
     critique.overall_match_score >= 80

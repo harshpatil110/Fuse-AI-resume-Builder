@@ -20,7 +20,7 @@ from models import (
     ProjectsSection,
     AwardsSection,
 )
-from llm_utils import initialize_llm_provider, extract_json_from_response
+from llm_utils import generate_json_completion
 from pymupdf_rag import to_markdown
 from typing import List, Optional, Dict, Any
 from prompt import (
@@ -38,11 +38,6 @@ logger = logging.getLogger(__name__)
 class PDFHandler:
     def __init__(self):
         self.template_manager = TemplateManager()
-        self._initialize_llm_provider()
-
-    def _initialize_llm_provider(self):
-        """Initialize the appropriate LLM provider based on the model."""
-        self.provider = initialize_llm_provider(DEFAULT_MODEL)
 
     def extract_text_from_pdf(self, pdf_path: str) -> Optional[str]:
         try:
@@ -85,49 +80,21 @@ class PDFHandler:
                 )
                 return None
 
-            chat_params = {
-                "model": DEFAULT_MODEL,
-                "messages": [
-                    {"role": "system", "content": section_system_message},
-                    {"role": "user", "content": prompt},
-                ],
-                "options": {
-                    "stream": False,
-                    "temperature": model_params["temperature"],
-                    "top_p": model_params["top_p"],
-                },
-            }
+            parsed_data = generate_json_completion(prompt, section_system_message)
+            logger.debug(f"✅ Successfully extracted {section_name} section")
 
-            kwargs = {}
-            if return_model:
-                kwargs["format"] = return_model.model_json_schema()
+            transformed_data = transform_parsed_data(parsed_data)
+            end_time = time.time()
+            total_time = end_time - start_time
+            logger.debug(
+                f"⏱️ Total time for separate section extraction: {total_time:.2f} seconds"
+            )
 
-            # Use the appropriate provider to make the API call
-            response = self.provider.chat(**chat_params, **kwargs)
+            return transformed_data
 
-            response_text = response["message"]["content"]
-
-            try:
-                response_text = extract_json_from_response(response_text)
-                json_start = response_text.find("{")
-                json_end = response_text.rfind("}")
-                if json_start != -1 and json_end != -1:
-                    response_text = response_text[json_start : json_end + 1]
-                parsed_data = json.loads(response_text)
-                logger.debug(f"✅ Successfully extracted {section_name} section")
-
-                transformed_data = transform_parsed_data(parsed_data)
-                end_time = time.time()
-                total_time = end_time - start_time
-                logger.debug(
-                    f"⏱️ Total time for separate section extraction: {total_time:.2f} seconds"
-                )
-
-                return transformed_data
-            except json.JSONDecodeError as e:
-                logger.error(f"❌ Error parsing JSON for {section_name} section: {e}")
-                logger.error(f"Raw response: {response_text}")
-                return None
+        except Exception as e:
+            logger.error(f"❌ Error parsing JSON for {section_name} section: {e}")
+            return None
 
         except Exception as e:
             logger.error(f"❌ Error calling LLM for {section_name} section: {e}")

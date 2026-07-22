@@ -3,9 +3,8 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Upload, PenLine, Settings, Clock } from 'lucide-react';
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/upload', label: 'Upload', icon: Upload },
-  { to: '/editor', label: 'Editor', icon: PenLine },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/history', label: 'History', icon: Clock },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];

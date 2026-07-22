@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { UploadCloud, FileText, CheckCircle, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 function DropZone({ label, hint, accept, file, onDrop, onClear }) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -61,18 +62,43 @@ function DropZone({ label, hint, accept, file, onDrop, onClear }) {
 }
 
 export default function Upload() {
+  const navigate = useNavigate();
   const [resumeFile, setResumeFile] = useState(null);
   const [jdFile, setJdFile] = useState(null);
   const [jdText, setJdText] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [error, setError] = useState(null);
 
   const hasResume = !!resumeFile;
   const hasJd = !!jdFile || jdText.trim().length > 0;
-  const canGenerate = hasResume && hasJd;
+  const canGenerate = hasResume && hasJd && !isAnalyzing;
 
-  const handleGenerate = () => {
-    console.log('Resume File:', resumeFile);
-    console.log('JD File:', jdFile);
-    console.log('JD Text:', jdText);
+  const handleGenerate = async () => {
+    setIsAnalyzing(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('resume', resumeFile);
+      if (jdFile) formData.append('jd_file', jdFile);
+      if (jdText) formData.append('jd_text', jdText);
+
+      const response = await fetch('http://localhost:5000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to analyze resume. Please try again.');
+      }
+
+      const data = await response.json();
+      navigate('/editor', { state: { criticData: data } });
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -87,6 +113,12 @@ export default function Upload() {
           both documents and generate an optimized, JD-aligned version of your resume.
         </p>
       </div>
+
+      {error && (
+        <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-sm">
+          {error}
+        </div>
+      )}
 
       {/* Upload Grid */}
       <div className="grid md:grid-cols-2 gap-8 mb-12">
@@ -144,7 +176,7 @@ export default function Upload() {
             : 'opacity-40 cursor-not-allowed'
         }`}
       >
-        Generate
+        {isAnalyzing ? 'Analyzing Resume...' : 'Generate'}
       </button>
 
       {/* Helper Text */}
