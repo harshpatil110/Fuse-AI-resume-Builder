@@ -75,19 +75,8 @@ router.get('/github/callback', async (req, res) => {
       }
     });
 
-    res.send(`
-      <html>
-        <head>
-          <script src="https://cdn.tailwindcss.com"></script>
-        </head>
-        <body class="bg-[#F7F5F0] text-gray-900 font-sans min-h-screen flex items-center justify-center p-8">
-          <div class="max-w-md w-full bg-white border border-gray-200 p-8">
-            <h1 class="text-3xl font-light tracking-tight mb-4 text-[#2A2927]">Authentication Successful</h1>
-            <p class="text-sm text-gray-500 mb-6 leading-relaxed">You have successfully authenticated with GitHub as <span class="font-medium text-gray-900">${githubUsername}</span>. You can now close this window and return to the application.</p>
-          </div>
-        </body>
-      </html>
-    `);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/settings?github_connected=true`);
   } catch (error) {
     console.error('Error during GitHub OAuth:', error.response?.data || error.message);
     res.status(500).send('Authentication failed');

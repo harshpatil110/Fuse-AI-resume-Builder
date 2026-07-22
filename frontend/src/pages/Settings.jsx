@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Check, Square, CheckSquare, Star, ExternalLink } from 'lucide-react';
 
 const GithubIcon = ({ size = 24, strokeWidth = 2, className = "" }) => (
@@ -65,6 +66,16 @@ export default function Settings() {
   const [isConnected, setIsConnected] = useState(false);
   const [repositories, setRepositories] = useState(MOCK_REPOS);
   const [selectedRepos, setSelectedRepos] = useState(new Set());
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('github_connected') === 'true') {
+      setIsConnected(true);
+      // Clean up the URL
+      searchParams.delete('github_connected');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const toggleRepo = (id) => {
     setSelectedRepos((prev) => {
