@@ -1,11 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 import uvicorn
 import os
 import shutil
 from uuid import uuid4
 from pdf import extract_resume_data
+from agents import run_critic_agent
 
 app = FastAPI(title="Fuse AI Engine")
 
@@ -19,6 +21,12 @@ app.add_middleware(
 
 TEMP_UPLOADS_DIR = "temp_uploads"
 os.makedirs(TEMP_UPLOADS_DIR, exist_ok=True)
+
+
+class CriticRequest(BaseModel):
+    resume_data: Dict[str, Any]
+    jd_text: str
+
 
 @app.post("/process-resume")
 async def process_resume(
@@ -55,6 +63,22 @@ async def process_resume(
         "has_jd_text": jd_text is not None,
         "extracted_data": extracted_data
     }
+
+
+@app.post("/api/criticize")
+async def criticize_resume(request: CriticRequest):
+    """Run the Critic Agent to analyze resume gaps against a Job Description."""
+    try:
+        critique = await run_critic_agent(request.resume_data, request.jd_text)
+        return {
+            "status": "success",
+            "critique": critique
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Critic Agent failed: {str(e)}")
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
