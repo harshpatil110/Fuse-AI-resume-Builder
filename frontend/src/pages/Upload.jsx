@@ -92,9 +92,10 @@ export default function Upload() {
       }
 
       const data = await response.json();
+      console.log("🚀 BACKEND PAYLOAD:", data);
       navigate('/editor', { state: { criticData: data } });
     } catch (err) {
-      console.error(err);
+      console.error("❌ UPLOAD API ERROR:", err);
       setError(err.message || 'An unexpected error occurred.');
     } finally {
       setIsAnalyzing(false);

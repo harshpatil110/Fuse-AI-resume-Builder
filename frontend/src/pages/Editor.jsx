@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AlertCircle, TrendingUp, XCircle, ArrowRight, CheckCircle, Sparkles } from 'lucide-react';
 
 // ── Mock Data ──
@@ -89,15 +89,34 @@ const MOCK_RESUME_SECTIONS = [
 // ── Component ──
 export default function Editor() {
   const location = useLocation();
+  const navigate = useNavigate();
+  
+  console.log("📥 RECEIVED STATE IN EDITOR:", location.state);
+  
   const criticData = location.state?.criticData?.critique || location.state?.criticData;
   
   const [critique] = useState(criticData || MOCK_CRITIQUE);
   const [resumeSections] = useState(MOCK_RESUME_SECTIONS);
 
+  if (!critique || Object.keys(critique).length === 0) {
+    return (
+      <div className="min-h-[60vh] bg-[#F7F5F0] flex flex-col items-center justify-center p-8">
+        <div className="bg-white border border-stone-200 p-10 text-center max-w-md">
+          <AlertCircle size={32} strokeWidth={1.5} className="text-stone-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold tracking-tight text-stone-900 mb-2">No Analysis Data</h2>
+          <p className="text-sm text-stone-500 mb-6">No analysis data found. Please try uploading your resume and job description again.</p>
+          <button onClick={() => navigate('/upload')} className="bg-stone-900 text-white rounded-sm px-6 py-2.5 text-sm font-medium tracking-wide hover:bg-stone-700 transition-colors duration-300">
+            Go to Upload
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Re-calculate derived arrays safely based on potentially live data
-  const weakPhrases = (critique.weak_verbs_found || []).map((v) => v.original);
-  const irrelevantCompanies = (critique.irrelevant_experience || []).map((e) =>
-    e.item.split('(')[0].trim().split(' at ').pop()?.trim()
+  const weakPhrases = (critique?.weak_verbs_found || []).map((v) => v.original);
+  const irrelevantCompanies = (critique?.irrelevant_experience || []).map((e) =>
+    e.item?.split('(')[0]?.trim().split(' at ').pop()?.trim()
   );
 
   const highlightText = (text) => {
@@ -119,9 +138,9 @@ export default function Editor() {
   };
 
   const scoreColor =
-    critique.overall_match_score >= 80
+    (critique?.overall_match_score || 0) >= 80
       ? 'text-green-700'
-      : critique.overall_match_score >= 60
+      : (critique?.overall_match_score || 0) >= 60
       ? 'text-amber-700'
       : 'text-red-700';
 
@@ -148,12 +167,12 @@ export default function Editor() {
             JD Alignment Score
           </p>
           <p className={`text-3xl font-bold tracking-tight ${scoreColor}`}>
-            {critique.overall_match_score}
+            {critique?.overall_match_score || 0}
             <span className="text-lg text-stone-400 font-normal">/100</span>
           </p>
         </div>
         <div className="max-w-md">
-          <p className="text-sm text-stone-500 leading-relaxed">{critique.summary}</p>
+          <p className="text-sm text-stone-500 leading-relaxed">{critique?.summary || ''}</p>
         </div>
       </div>
 
@@ -226,7 +245,7 @@ export default function Editor() {
               </h3>
             </div>
             <div className="flex flex-wrap gap-2">
-              {critique.missing_keywords.map((kw, i) => (
+              {(critique?.missing_keywords || []).map((kw, i) => (
                 <span
                   key={i}
                   className="border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium tracking-widest uppercase text-stone-600"
@@ -246,13 +265,13 @@ export default function Editor() {
               </h3>
             </div>
             <div className="space-y-4">
-              {critique.weak_verbs_found.map((item, i) => (
+              {(critique?.weak_verbs_found || []).map((item, i) => (
                 <div key={i} className="bg-white border border-stone-200 p-4">
                   <p className="text-xs text-stone-900 leading-relaxed mb-2">
                     <span className="bg-blue-50 border-b border-blue-200 px-0.5">
-                      {item.original.split(' ').slice(0, 3).join(' ')}
+                      {item.original?.split(' ').slice(0, 3).join(' ')}
                     </span>
-                    {' ' + item.original.split(' ').slice(3).join(' ')}
+                    {' ' + (item.original?.split(' ').slice(3).join(' ') || '')}
                   </p>
                   <div className="flex items-center gap-2 mb-2">
                     <ArrowRight size={12} strokeWidth={1.5} className="text-stone-400" />
@@ -273,7 +292,7 @@ export default function Editor() {
               </h3>
             </div>
             <div className="space-y-3">
-              {critique.irrelevant_experience.map((item, i) => (
+              {(critique?.irrelevant_experience || []).map((item, i) => (
                 <div key={i} className="bg-white border border-stone-200 p-4">
                   <p className="text-xs font-medium text-stone-900 mb-1">{item.item}</p>
                   <p className="text-xs text-stone-400 leading-relaxed">{item.reason}</p>
