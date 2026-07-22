@@ -7,7 +7,7 @@ Houses the multi-agent workflow: Critic Agent, Writer Agent, etc.
 import json
 import logging
 from prompts.template_manager import TemplateManager
-from llm_utils import generate_completion
+from llm_utils import generate_json_completion
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ async def run_critic_agent(resume_json: dict, jd_text: str) -> dict:
         raise ValueError("Failed to render critic_agent template.")
 
     logger.info("Running Critic Agent...")
-    result = generate_completion(prompt, system_message)
+    result = generate_json_completion(prompt, system_message)
     logger.info(f"Critic Agent finished. Match score: {result.get('overall_match_score', 'N/A')}")
 
     return result
@@ -74,7 +74,7 @@ async def run_github_matching_agent(github_repos: list, jd_text: str) -> dict:
         raise ValueError("Failed to render github_matching_agent template.")
 
     logger.info("Running GitHub Matching Agent...")
-    result = generate_completion(prompt, system_message)
+    result = generate_json_completion(prompt, system_message)
     logger.info(f"GitHub Matching Agent selected {len(result.get('selected_projects', []))} projects.")
 
     return result
@@ -109,7 +109,7 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
         raise ValueError("Failed to render writer_agent template.")
 
     logger.info("Running Writer Agent...")
-    result = generate_completion(prompt, system_message)
+    result = generate_json_completion(prompt, system_message)
     logger.info("Writer Agent finished. Resume rewrite complete.")
 
     return result
