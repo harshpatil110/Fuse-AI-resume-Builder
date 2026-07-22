@@ -8,10 +8,14 @@ import json
 import logging
 from prompts.template_manager import TemplateManager
 from llm_utils import generate_json_completion
+from resume_evaluator import evaluate_resume
 
 logger = logging.getLogger(__name__)
 
 template_manager = TemplateManager()
+
+QA_SCORE_THRESHOLD = 85
+QA_MAX_RETRIES = 2
 
 
 async def run_critic_agent(resume_json: dict, jd_text: str) -> dict:
