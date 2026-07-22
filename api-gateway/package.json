@@ -21,7 +21,9 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
-    "multer": "^2.2.0"
+    "handlebars": "^4.7.9",
+    "multer": "^2.2.0",
+    "puppeteer": "^25.3.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.10"

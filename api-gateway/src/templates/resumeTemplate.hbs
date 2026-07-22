@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Resume</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --text-main: #1C1917; /* stone-900 */
+      --text-muted: #57534E; /* stone-500 */
+      --border-color: #E7E5E4; /* stone-200 */
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #FFFFFF;
+      color: var(--text-main);
+      margin: 0;
+      padding: 0;
+      line-height: 1.5;
+      text-align: left;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .name {
+      font-family: 'Playfair Display', serif;
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 8px 0;
+      color: var(--text-main);
+    }
+
+    .role {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin: 0 0 16px 0;
+    }
+
+    .summary {
+      font-size: 14px;
+      color: var(--text-main);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 4px;
+      margin: 0 0 16px 0;
+    }
+
+    .item {
+      margin-bottom: 16px;
+    }
+
+    .item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .item-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--text-main);
+    }
+
+    .item-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .item-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0 0 8px 0;
+    }
+
+    .bullets {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 13px;
+      color: var(--text-main);
+    }
+
+    .bullets li {
+      margin-bottom: 4px;
+      line-height: 1.6;
+    }
+
+    .skills {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-main);
+    }
+  </style>
+</head>
+<body>
+
+  {{#if basics}}
+  <div class="header">
+    <h1 class="name">{{basics.name}}</h1>
+    <p class="role">{{basics.role}}</p>
+    <p class="summary">{{basics.summary}}</p>
+  </div>
+  {{/if}}
+
+  {{#if work}}
+  <div class="section">
+    <h2 class="section-title">Experience</h2>
+    {{#each work}}
+    <div class="item">
+      <div class="item-header">
+        <h3 class="item-title">{{position}}</h3>
+        {{#if period}}<span class="item-subtitle">{{period}}</span>{{/if}}
+      </div>
+      <p class="item-meta">{{company}}</p>
+      {{#if bullets}}
+      <ul class="bullets">
+        {{#each bullets}}
+        <li>{{this}}</li>
+        {{/each}}
+      </ul>
+      {{/if}}
+    </div>
+    {{/each}}
+  </div>
+  {{/if}}
+
+  {{#if projects}}
+  <div class="section">
+    <h2 class="section-title">Projects</h2>
+    {{#each projects}}
+    <div class="item">
+      <div class="item-header">
+        <h3 class="item-title">{{name}}</h3>
+      </div>
+      <p class="item-meta">{{technologies}} | {{description}}</p>
+      {{#if bullets}}
+      <ul class="bullets">
+        {{#each bullets}}
+        <li>{{this}}</li>
+        {{/each}}
+      </ul>
+      {{/if}}
+    </div>
+    {{/each}}
+  </div>
+  {{/if}}
+
+  {{#if skills}}
+  <div class="section">
+    <h2 class="section-title">Skills</h2>
+    <div class="skills">{{skills}}</div>
+  </div>
+  {{/if}}
+
+</body>
+</html>
