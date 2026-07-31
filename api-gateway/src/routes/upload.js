@@ -1,5 +1,8 @@
 import express from 'express';
 import { upload } from '../middleware/upload.js';
+import axios from 'axios';
+import FormData from 'form-data';
+import fs from 'fs';
 
 const router = express.Router();
 
@@ -9,7 +12,7 @@ const uploadFields = upload.fields([
 ]);
 
 router.post('/upload', (req, res) => {
-  uploadFields(req, res, (err) => {
+  uploadFields(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ status: 'error', message: err.message });
     }
@@ -23,26 +26,47 @@ router.post('/upload', (req, res) => {
     }
 
     if (!jdFile && !jdText) {
+      if (resumeFile) fs.unlinkSync(resumeFile.path);
       return res.status(400).json({ status: 'error', message: 'Either jd_file or jd_text is required' });
     }
 
-    res.json({
-      status: 'success',
-      resume: {
-        path: resumeFile.path,
-        filename: resumeFile.filename,
-        mimetype: resumeFile.mimetype,
-        size: resumeFile.size
-      },
-      jd: jdFile ? {
-        path: jdFile.path,
-        filename: jdFile.filename,
-        mimetype: jdFile.mimetype,
-        size: jdFile.size
-      } : {
-        text: jdText
+    try {
+      const formData = new FormData();
+      formData.append('resume', fs.createReadStream(resumeFile.path));
+      if (jdFile) {
+        formData.append('jd_file', fs.createReadStream(jdFile.path));
       }
-    });
+      if (jdText) {
+        formData.append('jd_text', jdText);
+      }
+
+      // Step 1: Parse the resume PDF via Python Engine
+      const processResponse = await axios.post('http://localhost:8000/process-resume', formData, {
+        headers: formData.getHeaders(),
+      });
+
+      const extractedData = processResponse.data.extracted_data;
+
+      // Step 2: Run the Critic Agent
+      const criticResponse = await axios.post('http://localhost:8000/api/criticize', {
+        resume_data: extractedData,
+        jd_text: jdText || 'Job description provided via file',
+      });
+
+      // Step 3: Return the complete payload to the frontend
+      res.json({
+        parsed_resume: extractedData,
+        critique: criticResponse.data.critique
+      });
+
+    } catch (error) {
+      console.error("AI Engine processing failed:", error.response?.data || error.message);
+      res.status(500).json({ error: "AI Engine processing failed" });
+    } finally {
+      // Clean up local temp files
+      if (resumeFile) fs.unlinkSync(resumeFile.path);
+      if (jdFile) fs.unlinkSync(jdFile.path);
+    }
   });
 });
 
