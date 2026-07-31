@@ -56,7 +56,8 @@ router.post('/upload', (req, res) => {
       // Step 3: Return the complete payload to the frontend
       res.json({
         parsed_resume: extractedData,
-        critique: criticResponse.data.critique
+        critique: criticResponse.data.critique,
+        jd_text: jdText || null
       });
 
     } catch (error) {
