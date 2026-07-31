@@ -7,6 +7,16 @@ import githubRoutes from './routes/github.js';
 import exportRoutes from './routes/export.js';
 import historyRoutes from './routes/history.js';
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ UNHANDLED REJECTION at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ UNCAUGHT EXCEPTION:', err);
+  process.exit(1);
+});
+
 const app = express();
 const port = process.env.PORT || 5000;
 

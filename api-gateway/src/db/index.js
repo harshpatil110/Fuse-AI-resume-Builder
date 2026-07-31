@@ -1,9 +1,16 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL must be set');
+let db;
+try {
+  if (!process.env.DATABASE_URL) {
+    console.error("⚠️ Missing DATABASE_URL in environment variables");
+  } else {
+    const sql = neon(process.env.DATABASE_URL);
+    db = drizzle(sql);
+  }
+} catch (error) {
+  console.error("❌ Database initialization failed:", error);
 }
 
-const sql = neon(process.env.DATABASE_URL);
-export const db = drizzle(sql);
+export { db };
