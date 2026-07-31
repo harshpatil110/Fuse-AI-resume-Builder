@@ -36,7 +36,7 @@ class GithubMatchRequest(BaseModel):
 class WriterRequest(BaseModel):
     parsed_resume: Dict[str, Any]
     jd_text: str
-    selected_github_projects: Dict[str, Any]
+    selected_github_projects: list
 
 
 @app.post("/process-resume")

@@ -54,6 +54,8 @@ def generate_completion(prompt: str, system_message: str) -> dict:
     otherwise returns the raw response wrapped in a dict.
     """
     try:
+        endpoint = f"{str(client.base_url).rstrip('/')}/chat/completions"
+        print(f"Making LLM request to: {endpoint} (model: {config.MODEL_NAME})", flush=True)
         response = client.chat.completions.create(
             model=config.MODEL_NAME,
             messages=[
@@ -93,6 +95,8 @@ def generate_json_completion(prompt: str, system_message: str) -> dict:
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
+            endpoint = f"{str(client.base_url).rstrip('/')}/chat/completions"
+            print(f"Making LLM request to: {endpoint} (model: {config.MODEL_NAME})", flush=True)
             response = client.chat.completions.create(
                 model=config.MODEL_NAME,
                 messages=[

@@ -95,9 +95,18 @@ export default function Editor() {
   
   const criticData = location.state?.criticData?.critique || location.state?.criticData;
   const rawData = location.state?.criticData || {};
-  
+
+  // Backend sends parsed_resume as a dict ({ raw_text, pages, metadata, chunks }) —
+  // normalize to an array of sections so the resume panel never calls .map on a non-array.
+  const rawParsed = rawData.parsed_resume || rawData.parsedResume;
+  const initialSections = Array.isArray(rawParsed)
+    ? rawParsed
+    : rawParsed && typeof rawParsed === 'object' && rawParsed.raw_text
+    ? [{ title: 'Extracted Resume', content: rawParsed.raw_text }]
+    : MOCK_RESUME_SECTIONS;
+
   const [critique] = useState(criticData || MOCK_CRITIQUE);
-  const [resumeSections] = useState(rawData.parsed_resume || rawData.parsedResume || MOCK_RESUME_SECTIONS);
+  const [resumeSections] = useState(initialSections);
 
   if (!critique || Object.keys(critique).length === 0) {
     return (
@@ -147,12 +156,6 @@ export default function Editor() {
 
   return (
     <div>
-      {/* RAW BACKEND DUMP - DEBUGGING ONLY */}
-      <div className="bg-stone-900 text-green-400 p-4 mb-8 rounded-sm overflow-x-auto text-xs font-mono">
-        <p className="text-white mb-2 font-bold uppercase tracking-widest">--- Raw Backend State Dump ---</p>
-        <pre>{JSON.stringify(location.state, null, 2)}</pre>
-      </div>
-
       {/* Header */}
       <div className="mb-10">
         <p className="text-xs font-medium tracking-widest uppercase text-stone-400 mb-4">
