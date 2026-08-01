@@ -324,14 +324,32 @@ def generated_bullet_text(resume: dict) -> str:
 
 # ── Metric / fact-check enforcement ──────────────────────────────────────────
 # Number extraction for the zero-tolerance fabrication rule. Catches integers,
-# decimals, percentages ("30%"), "2x"-style multipliers, K/M-suffixed counts
-# ("5K", "10M") and comma-grouped amounts ("2,000"). Numbers glued to letters
-# ("10pt", "a4paper", "MySQL") are NOT matched.
+# decimals, percentages ("30%"), "2x"-style multipliers, K/M/L-suffixed counts
+# ("5K", "10M", "12L"), comma-grouped amounts ("2,000") and ordinals ("1st").
+# Numbers glued to letters ("10pt", "a4paper", "MySQL", "v2.0") are NOT matched.
 _NUMBER_RE = re.compile(
-    r"\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:%|x|[kKmM])?\b"
+    r"\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:%|x|×|X|[kKmMlL])?(?:st|nd|rd|th)?"
+    r"(?![a-zA-Z0-9])"
 )
 _SAFE_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 _CLAUSE_SPLIT_RE = re.compile(r"(?<=[,;.])\s+")
+_CONJUNCTION_RE = re.compile(r"\s+(?:and|but|also|then|while|plus)\s+", re.IGNORECASE)
+
+
+def normalize_metric_text(text: str) -> str:
+    """Normalize metric text so equivalent number representations compare equal.
+
+    "30 percent" / "30 per cent" collapse to "30%" and the Unicode multiply
+    sign "×" becomes "x". Applied to BOTH original and generated text before
+    extraction, so a fact written "30 percent" and one written "30%" compare as
+    the same number. Character case is preserved so reported tokens keep their
+    original spelling ("15L", "5K"); :func:`_canonical_number` lowercases
+    internally for comparison.
+    """
+    t = text or ""
+    t = re.sub(r"\s*per\s*cent\b", "%", t, flags=re.IGNORECASE)
+    t = t.replace("×", "x")
+    return t
 
 
 def extract_numbers(text: str) -> List[str]:
@@ -339,9 +357,48 @@ def extract_numbers(text: str) -> List[str]:
     return [match.group(0) for match in _NUMBER_RE.finditer(text or "")]
 
 
+def _canonical_number(token: str) -> str:
+    """Canonical form so equivalent representations of a number compare equal.
+
+    Strips comma grouping ("50,000" -> "50000"), scales "k"/"K" to thousands,
+    uppercase "M" to millions and "l"/"L" to lakhs, trims trailing zeros on
+    decimals ("3.50" -> "3.5") and folds ordinals ("1st" -> "1"). The percent
+    and multiplier qualifiers ("30%", "1.5x") are preserved, so adding a "%" to
+    a number is still detected as a change. Lowercase "m" is left as-is — it is
+    ambiguous (minutes vs meters vs million).
+    """
+    t = token.replace(",", "").replace("×", "x")
+    original = t  # keep case for the M/m disambiguation below
+    t = t.lower()
+    if t.endswith(("st", "nd", "rd", "th")):
+        t = t[:-2]
+    elif t.endswith("k"):
+        t = str(int(float(t[:-1]) * 1_000))
+    elif t.endswith("l"):
+        t = str(int(float(t[:-1]) * 100_000))
+    elif t.endswith("m") and original.endswith("M"):
+        t = str(int(float(t[:-1]) * 1_000_000))
+    if "." in t:
+        t = t.rstrip("0").rstrip(".") or "0"
+    return t
+
+
 def _is_safe_generic(number: str) -> bool:
-    """True for numbers that are not fabricated metrics: calendar years."""
-    return bool(_SAFE_YEAR_RE.fullmatch(number))
+    """True for numbers that are not fabricated metrics.
+
+    Two categories are treated as safe generic numbers: calendar years
+    (1900-2099) and phone-like digit runs (10-15 digits), so a reformatted
+    contact number is never mistaken for a hallucinated metric.
+
+    Note: the year rule is intentionally broad. A four-digit metric that
+    happens to fall in the year range would be missed — accepted as a
+    documented limitation per the zero-tolerance design's "safe generic
+    numbers" allowance.
+    """
+    if _SAFE_YEAR_RE.fullmatch(number):
+        return True
+    digits = re.sub(r"\D", "", number)
+    return 10 <= len(digits) <= 15
 
 
 def verify_metrics_integrity(original_text: str, generated_text: str) -> List[str]:
@@ -350,16 +407,34 @@ def verify_metrics_integrity(original_text: str, generated_text: str) -> List[st
     Years (1900-2099) are treated as safe generic numbers and ignored. Any
     returned number is a potentially fabricated metric — e.g. a "30%" latency
     reduction that never appeared in the candidate's real resume. Comparison is
-    exact on the token as extracted, so "30%" is distinct from "30".
+    representation-normalized (:func:`_canonical_number`), so "50,000" and "50k"
+    are treated as the same fact, while "30" vs "30%" (a newly invented
+    percentage) are not.
     """
+    orig_norm = normalize_metric_text(original_text)
+    gen_norm = normalize_metric_text(generated_text)
     allowed = {
-        n for n in extract_numbers(original_text) if not _is_safe_generic(n)
+        _canonical_number(n)
+        for n in extract_numbers(orig_norm)
+        if not _is_safe_generic(n)
     }
-    generated = extract_numbers(generated_text)
+    generated = extract_numbers(gen_norm)
     return sorted(
-        {n for n in generated if n not in allowed and not _is_safe_generic(n)},
+        {
+            n
+            for n in generated
+            if _canonical_number(n) not in allowed and not _is_safe_generic(n)
+        },
         key=lambda n: (len(n), n),
     )
+
+
+def _clause_numbers(clause: str) -> Set[str]:
+    """Canonical numbers present in a single clause."""
+    return {
+        _canonical_number(n)
+        for n in extract_numbers(normalize_metric_text(clause))
+    }
 
 
 def strip_hallucinated_metrics(
@@ -368,17 +443,17 @@ def strip_hallucinated_metrics(
 ) -> List[str]:
     """Remove clauses containing hallucinated numbers from ``bullets``.
 
-    The fabricated number's clause (split on commas / semicolons / periods) is
-    dropped; a bullet that reduces to nothing is removed entirely. Bullets with
-    no hallucinated numbers are returned unchanged.
+    A clause is dropped only when it contains an exact (canonical) fabricated
+    number — so a real "2.5" is never matched by a hallucinated "5" and "9:00"
+    is never matched by a hallucinated "00". When a clause mixes a fabricated
+    number with real claims, it is split on conjunctions and only the fabricated
+    sub-clause is removed, preserving the legitimate content. A bullet reduced
+    to nothing is removed entirely.
     """
     if not hallucinated:
         return list(bullets)
-    target = re.compile(
-        r"(?<![a-z0-9])(?:"
-        + "|".join(re.escape(n) for n in hallucinated)
-        + r")(?![a-z0-9%])"
-    )
+    hall = {_canonical_number(h) for h in hallucinated}
+
     cleaned: List[str] = []
     for bullet in bullets:
         clauses = [
@@ -386,9 +461,21 @@ def strip_hallucinated_metrics(
             for c in _CLAUSE_SPLIT_RE.split(bullet)
             if c.strip()
         ]
-        kept = [c for c in clauses if not target.search(c)]
-        if kept:
-            cleaned.append(", ".join(kept))
+        kept_clauses: List[str] = []
+        for clause in clauses:
+            if not _clause_numbers(clause) & hall:
+                kept_clauses.append(clause)
+                continue
+            # Keep the sub-clauses of a mixed clause that are clean.
+            clean_parts = [
+                part.strip()
+                for part in _CONJUNCTION_RE.split(clause)
+                if part.strip() and not _clause_numbers(part) & hall
+            ]
+            if clean_parts:
+                kept_clauses.append(" ".join(clean_parts))
+        if kept_clauses:
+            cleaned.append(", ".join(kept_clauses))
     return cleaned
 
 
@@ -433,19 +520,24 @@ def enforce_metrics_integrity(
 def extract_original_text(resume: dict) -> str:
     """Concatenate the candidate's original resume text (metric source of truth).
 
-    Handles both pipeline shapes: the LaTeX ``extracted_data`` dict
-    (``raw_tex`` / ``sections``) and a JSON-Resume dict (``work`` / ``projects``
+    Handles every ingestion shape: the LaTeX ``extracted_data`` dict
+    (``raw_tex`` / ``sections``), the PDF ``extract_resume_data`` dict
+    (``raw_text`` / ``chunks``), and a JSON-Resume dict (``work`` / ``projects``
     / ``skills``). The Writer may only reuse numbers present here.
     """
     if not isinstance(resume, dict):
         return ""
     parts: List[str] = []
-    raw = resume.get("raw_tex")
-    if isinstance(raw, str):
-        parts.append(raw)
+    for key in ("raw_tex", "raw_text"):
+        raw = resume.get(key)
+        if isinstance(raw, str):
+            parts.append(raw)
     sections = resume.get("sections")
     if isinstance(sections, dict):
         parts.extend(str(v) for v in sections.values() if v)
+    chunks = resume.get("chunks")
+    if isinstance(chunks, list):
+        parts.extend(str(c) for c in chunks if c)
     for section_key in ("work", "projects"):
         entries = resume.get(section_key) or []
         if isinstance(entries, list):
