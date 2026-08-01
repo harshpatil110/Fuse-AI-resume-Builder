@@ -22,6 +22,20 @@ IMMUTABLE_CONTENT_CONSTRAINT = (
     "within the Experience and Projects sections."
 )
 
+# ── Anti-hallucination / skill-grounding guardrail ───────────────────────────
+# Injected into the Writer Agent system prompt and template. Skills must be
+# proven by the candidate's actual experience/project text; JD keywords the
+# candidate never used are ignored, not invented. (See validator.py for the
+# matching code-level enforcement: ungrounded skills are stripped from output.)
+SKILL_GROUNDING_CONSTRAINT = (
+    "Do not stuff keywords. Do not list skills that are not explicitly proven "
+    "in the experience or project descriptions. If the Job Description requires "
+    "a skill (e.g., AWS) that is absent from the candidate's history, you must "
+    "IGNORE it. You are optimizing phrasing, not fabricating qualifications. "
+    "Every skill you add to the Skills section must be explicitly mentioned in "
+    "the bullet points you write."
+)
+
 # Load environment variables
 load_dotenv()
 

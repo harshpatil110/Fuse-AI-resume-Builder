@@ -160,9 +160,15 @@ async def rewrite_resume(request: WriterRequest):
             request.jd_text,
             request.selected_github_projects
         )
+        # The validator adds an internal "_skills_grounding" audit key to the
+        # resume dict; never serialize it to clients.
+        rewritten_resume = result["resume"]
+        if isinstance(rewritten_resume, dict):
+            rewritten_resume = dict(rewritten_resume)
+            rewritten_resume.pop("_skills_grounding", None)
         return {
             "status": "success",
-            "rewritten_resume": result["resume"],
+            "rewritten_resume": rewritten_resume,
             "qa_score": result["score"],
             "qa_feedback": result["feedback"],
             "qa_attempts": result["attempts"],

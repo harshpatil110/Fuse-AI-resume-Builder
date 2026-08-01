@@ -6,10 +6,11 @@ Houses the multi-agent workflow: Critic Agent, Writer Agent, etc.
 
 import json
 import logging
-from prompt import IMMUTABLE_CONTENT_CONSTRAINT
+from prompt import IMMUTABLE_CONTENT_CONSTRAINT, SKILL_GROUNDING_CONSTRAINT
 from prompts.template_manager import TemplateManager
 from llm_utils import generate_json_completion
 from resume_evaluator import evaluate_resume
+from validator import extract_known_skills, ground_resume_skills
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,8 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
         "You are an Elite Career Consultant and Senior Technical Resume Writer. "
         "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
         "Never include markdown formatting, code fences, or conversational text. "
-        f"{IMMUTABLE_CONTENT_CONSTRAINT}"
+        f"{IMMUTABLE_CONTENT_CONSTRAINT} "
+        f"{SKILL_GROUNDING_CONSTRAINT}"
     )
 
     prompt = template_manager.render_template(
@@ -117,6 +119,8 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
 
     logger.info("Running Writer Agent...")
     result = generate_json_completion(prompt, system_message)
+    # Anti-hallucination: strip any proposed skill not proven in the bullets.
+    result = ground_resume_skills(result, extract_known_skills(parsed_resume))
     logger.info("Writer Agent finished. Resume rewrite complete.")
 
     return result
@@ -135,7 +139,8 @@ async def run_writer_agent_with_feedback(
         "You are an Elite Career Consultant and Senior Technical Resume Writer. "
         "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
         "Never include markdown formatting, code fences, or conversational text. "
-        f"{IMMUTABLE_CONTENT_CONSTRAINT}"
+        f"{IMMUTABLE_CONTENT_CONSTRAINT} "
+        f"{SKILL_GROUNDING_CONSTRAINT}"
     )
 
     feedback_block = ""
@@ -163,6 +168,8 @@ async def run_writer_agent_with_feedback(
 
     logger.info(f"Running Writer Agent {'(with feedback)' if previous_feedback else '(initial attempt)'}...")
     result = generate_json_completion(prompt, system_message)
+    # Anti-hallucination: strip any proposed skill not proven in the bullets.
+    result = ground_resume_skills(result, extract_known_skills(parsed_resume))
     logger.info("Writer Agent finished.")
 
     return result
