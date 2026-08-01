@@ -10,8 +10,8 @@ NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 # Must be an id from https://integrate.api.nvidia.com/v1/models.
 # The prior value "THUDM/glm-4-9b-chat" is NOT in the NIM catalog and
 # caused 404 "page not found" on every chat request.
-# "z-ai/glm-5.2" (project's intended model) works but free-tier inference
-# is extremely slow (minutes per call). "deepseek-ai/deepseek-v4-flash"
-# responds in ~1s on this account. Swap back if you prefer GLM-5.2.
-MODEL_NAME = "deepseek-ai/deepseek-v4-flash"
+# "deepseek-ai/deepseek-v4-flash" responded in ~1s but is a small/fast model.
+# The user explicitly chose "nvidia/nemotron-3-ultra-550b-a55b" (Nvidia
+# Nemotron 3 Ultra) for higher-quality output — slower, but quality over speed.
+MODEL_NAME = "nvidia/nemotron-3-ultra-550b-a55b"
 
