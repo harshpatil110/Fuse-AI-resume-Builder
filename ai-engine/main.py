@@ -173,6 +173,7 @@ async def rewrite_resume(request: WriterRequest):
             "qa_feedback": result["feedback"],
             "qa_attempts": result["attempts"],
             "passed_qa": result["passed_qa"],
+            "metric_fixes": result.get("metric_fixes", 0),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

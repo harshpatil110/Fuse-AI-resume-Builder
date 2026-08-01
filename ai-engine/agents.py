@@ -6,11 +6,22 @@ Houses the multi-agent workflow: Critic Agent, Writer Agent, etc.
 
 import json
 import logging
-from prompt import IMMUTABLE_CONTENT_CONSTRAINT, SKILL_GROUNDING_CONSTRAINT
+from prompt import (
+    IMMUTABLE_CONTENT_CONSTRAINT,
+    METRIC_FABRICATION_CONSTRAINT,
+    SKILL_GROUNDING_CONSTRAINT,
+)
 from prompts.template_manager import TemplateManager
 from llm_utils import generate_json_completion
 from resume_evaluator import evaluate_resume
-from validator import extract_known_skills, ground_resume_skills
+from validator import (
+    enforce_metrics_integrity,
+    extract_known_skills,
+    extract_original_text,
+    generated_bullet_text,
+    ground_resume_skills,
+    verify_metrics_integrity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +115,8 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
         "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
         "Never include markdown formatting, code fences, or conversational text. "
         f"{IMMUTABLE_CONTENT_CONSTRAINT} "
-        f"{SKILL_GROUNDING_CONSTRAINT}"
+        f"{SKILL_GROUNDING_CONSTRAINT} "
+        f"{METRIC_FABRICATION_CONSTRAINT}"
     )
 
     prompt = template_manager.render_template(
@@ -140,7 +152,8 @@ async def run_writer_agent_with_feedback(
         "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
         "Never include markdown formatting, code fences, or conversational text. "
         f"{IMMUTABLE_CONTENT_CONSTRAINT} "
-        f"{SKILL_GROUNDING_CONSTRAINT}"
+        f"{SKILL_GROUNDING_CONSTRAINT} "
+        f"{METRIC_FABRICATION_CONSTRAINT}"
     )
 
     feedback_block = ""
@@ -198,6 +211,21 @@ async def generate_and_qa_resume(
     best_feedback = ""
     previous_feedback = None
 
+    # The candidate's real resume is the ONLY permitted source of numbers.
+    original_text = extract_original_text(parsed_resume)
+
+    def finalize(resume, score, feedback, attempts, passed_qa):
+        """Hard gate: strip any hallucinated metric clauses before returning."""
+        cleaned, hallucinated = enforce_metrics_integrity(resume, original_text)
+        return {
+            "resume": cleaned,
+            "score": score,
+            "feedback": feedback,
+            "attempts": attempts,
+            "passed_qa": passed_qa,
+            "metric_fixes": len(hallucinated),
+        }
+
     total_attempts = 1 + QA_MAX_RETRIES  # 1 initial + 2 retries = 3 max
 
     for attempt in range(1, total_attempts + 1):
@@ -218,6 +246,21 @@ async def generate_and_qa_resume(
         score = evaluation.get("score", 0)
         feedback = evaluation.get("feedback", "")
 
+        # Metric-fabrication check: surface the invented number so the retry can
+        # correct it explicitly (strict, one-time regeneration feedback).
+        hallucinated = verify_metrics_integrity(
+            original_text, generated_bullet_text(generated_resume)
+        )
+        if hallucinated:
+            logger.warning(
+                f"QA Loop — Attempt {attempt} fabricated metric(s): {hallucinated}"
+            )
+            feedback += (
+                f" METRIC INTEGRITY: you invented number(s) {hallucinated}, which "
+                "are absent from the original resume. Remove them; use ONLY numbers "
+                "explicitly present in the candidate's original resume."
+            )
+
         logger.info(f"QA Loop — Attempt {attempt} scored {score}/100")
 
         # Track the best result
@@ -226,16 +269,10 @@ async def generate_and_qa_resume(
             best_resume = generated_resume
             best_feedback = feedback
 
-        # If score meets threshold, return immediately
+        # If score meets threshold, return immediately (final gate applies)
         if score >= QA_SCORE_THRESHOLD:
             logger.info(f"QA Loop — Score {score} meets threshold ({QA_SCORE_THRESHOLD}). Returning.")
-            return {
-                "resume": generated_resume,
-                "score": score,
-                "feedback": feedback,
-                "attempts": attempt,
-                "passed_qa": True,
-            }
+            return finalize(generated_resume, score, feedback, attempt, True)
 
         # Otherwise, set feedback for next iteration
         missing = evaluation.get("missing_keywords", [])
@@ -245,14 +282,8 @@ async def generate_and_qa_resume(
 
         logger.warning(f"QA Loop — Score {score} below threshold. Feedback: {feedback}")
 
-    # All retries exhausted — return the best attempt
+    # All retries exhausted — return the best attempt (final gate applies)
     logger.warning(
         f"QA Loop — Max retries exhausted. Returning best resume (score: {best_score})."
     )
-    return {
-        "resume": best_resume,
-        "score": best_score,
-        "feedback": best_feedback,
-        "attempts": total_attempts,
-        "passed_qa": False,
-    }
+    return finalize(best_resume, best_score, best_feedback, total_attempts, False)

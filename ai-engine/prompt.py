@@ -36,6 +36,19 @@ SKILL_GROUNDING_CONSTRAINT = (
     "the bullet points you write."
 )
 
+# ── Zero-tolerance metric-fabrication guardrail ──────────────────────────────
+# Injected into the Writer Agent system prompt and template. Numbers must be
+# facts from the original resume; the model must never invent metrics or
+# durations. (See validator.verify_metrics_integrity for the matching code-level
+# enforcement: hallucinated numbers are detected and their clauses stripped.)
+METRIC_FABRICATION_CONSTRAINT = (
+    "You must NEVER invent, infer, or fabricate numerical metrics, percentages, "
+    "or timeline durations. You may only use numbers that are explicitly present "
+    "in the original resume text provided to you. If a bullet point lacks a "
+    "metric, improve the action verb and impact phrasing, but leave the metric "
+    "blank. Do not guess or estimate numbers."
+)
+
 # Load environment variables
 load_dotenv()
 

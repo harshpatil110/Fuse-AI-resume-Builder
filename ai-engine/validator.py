@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 import re
 from difflib import SequenceMatcher
-from typing import Iterable, List, Optional, Sequence, Set
+from typing import Iterable, List, Optional, Sequence, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -313,3 +313,151 @@ def _extract_bullets(resume: dict) -> List[str]:
             if isinstance(entry_bullets, list):
                 bullets.extend(str(b) for b in entry_bullets if b)
     return bullets
+
+
+def generated_bullet_text(resume: dict) -> str:
+    """Joined text of the generated work/project bullets (for fact-checking)."""
+    if not isinstance(resume, dict):
+        return ""
+    return " ".join(_extract_bullets(resume))
+
+
+# ── Metric / fact-check enforcement ──────────────────────────────────────────
+# Number extraction for the zero-tolerance fabrication rule. Catches integers,
+# decimals, percentages ("30%"), "2x"-style multipliers, K/M-suffixed counts
+# ("5K", "10M") and comma-grouped amounts ("2,000"). Numbers glued to letters
+# ("10pt", "a4paper", "MySQL") are NOT matched.
+_NUMBER_RE = re.compile(
+    r"\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:%|x|[kKmM])?\b"
+)
+_SAFE_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+_CLAUSE_SPLIT_RE = re.compile(r"(?<=[,;.])\s+")
+
+
+def extract_numbers(text: str) -> List[str]:
+    """Return every number/percentage/decimal token in ``text``, in order."""
+    return [match.group(0) for match in _NUMBER_RE.finditer(text or "")]
+
+
+def _is_safe_generic(number: str) -> bool:
+    """True for numbers that are not fabricated metrics: calendar years."""
+    return bool(_SAFE_YEAR_RE.fullmatch(number))
+
+
+def verify_metrics_integrity(original_text: str, generated_text: str) -> List[str]:
+    """Return numbers in ``generated_text`` that are absent from ``original_text``.
+
+    Years (1900-2099) are treated as safe generic numbers and ignored. Any
+    returned number is a potentially fabricated metric — e.g. a "30%" latency
+    reduction that never appeared in the candidate's real resume. Comparison is
+    exact on the token as extracted, so "30%" is distinct from "30".
+    """
+    allowed = {
+        n for n in extract_numbers(original_text) if not _is_safe_generic(n)
+    }
+    generated = extract_numbers(generated_text)
+    return sorted(
+        {n for n in generated if n not in allowed and not _is_safe_generic(n)},
+        key=lambda n: (len(n), n),
+    )
+
+
+def strip_hallucinated_metrics(
+    bullets: Sequence[str],
+    hallucinated: Sequence[str],
+) -> List[str]:
+    """Remove clauses containing hallucinated numbers from ``bullets``.
+
+    The fabricated number's clause (split on commas / semicolons / periods) is
+    dropped; a bullet that reduces to nothing is removed entirely. Bullets with
+    no hallucinated numbers are returned unchanged.
+    """
+    if not hallucinated:
+        return list(bullets)
+    target = re.compile(
+        r"(?<![a-z0-9])(?:"
+        + "|".join(re.escape(n) for n in hallucinated)
+        + r")(?![a-z0-9%])"
+    )
+    cleaned: List[str] = []
+    for bullet in bullets:
+        clauses = [
+            c.strip().rstrip(",;.")
+            for c in _CLAUSE_SPLIT_RE.split(bullet)
+            if c.strip()
+        ]
+        kept = [c for c in clauses if not target.search(c)]
+        if kept:
+            cleaned.append(", ".join(kept))
+    return cleaned
+
+
+def enforce_metrics_integrity(
+    generated_resume: dict,
+    original_text: str,
+) -> Tuple[dict, List[str]]:
+    """Strip any hallucinated metric clauses from the generated resume.
+
+    Compares every generated work/project bullet against ``original_text`` (the
+    candidate's real resume — the only permitted source of numbers). Clauses
+    containing numbers absent from it (and not safe years) are removed. Returns
+    ``(resume, hallucinated_numbers)``; the resume is returned unchanged if no
+    hallucinated numbers were found.
+    """
+    if not isinstance(generated_resume, dict):
+        return generated_resume, []
+    bullets = _extract_bullets(generated_resume)
+    if not bullets:
+        return generated_resume, []
+
+    hallucinated = verify_metrics_integrity(original_text, " ".join(bullets))
+    if not hallucinated:
+        return generated_resume, []
+
+    logger.warning(
+        "[validator] Stripped hallucinated metric clauses containing: %s",
+        hallucinated,
+    )
+    for section_key in ("work", "projects"):
+        entries = generated_resume.get(section_key) or []
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if isinstance(entry, dict) and isinstance(entry.get("bullets"), list):
+                entry["bullets"] = strip_hallucinated_metrics(
+                    entry["bullets"], hallucinated
+                )
+    return generated_resume, hallucinated
+
+
+def extract_original_text(resume: dict) -> str:
+    """Concatenate the candidate's original resume text (metric source of truth).
+
+    Handles both pipeline shapes: the LaTeX ``extracted_data`` dict
+    (``raw_tex`` / ``sections``) and a JSON-Resume dict (``work`` / ``projects``
+    / ``skills``). The Writer may only reuse numbers present here.
+    """
+    if not isinstance(resume, dict):
+        return ""
+    parts: List[str] = []
+    raw = resume.get("raw_tex")
+    if isinstance(raw, str):
+        parts.append(raw)
+    sections = resume.get("sections")
+    if isinstance(sections, dict):
+        parts.extend(str(v) for v in sections.values() if v)
+    for section_key in ("work", "projects"):
+        entries = resume.get(section_key) or []
+        if isinstance(entries, list):
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("summary"):
+                    parts.append(str(entry["summary"]))
+                for bullet in entry.get("bullets") or []:
+                    if bullet:
+                        parts.append(str(bullet))
+    skills = resume.get("skills")
+    if isinstance(skills, list):
+        parts.extend(str(s) for s in skills if s)
+    return " ".join(parts)
