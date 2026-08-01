@@ -7,6 +7,7 @@ import githubRoutes from './routes/github.js';
 import exportRoutes from './routes/export.js';
 import historyRoutes from './routes/history.js';
 import rewriteRoutes from './routes/rewrite.js';
+import compileRoutes from './routes/compile.js';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ UNHANDLED REJECTION at:', promise, 'reason:', reason);
@@ -32,6 +33,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', rewriteRoutes);
+app.use('/api', compileRoutes);
 app.use('/api/github', githubRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/history', historyRoutes);

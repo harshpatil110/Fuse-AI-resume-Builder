@@ -7,22 +7,29 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+    // Strip directory components and hostile characters from the client-supplied
+    // name so an attacker-controlled originalname cannot escape uploads/.
+    const safeName = path.basename(file.originalname || '').replace(/[^\w.\- ]/g, '_');
+    cb(null, uniqueSuffix + '-' + safeName);
   }
 });
 
-const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = {
-    resume: ['application/pdf'],
-    jd_file: ['application/pdf', 'text/plain']
-  };
+// Matched by file *extension* rather than MIME type — browsers label .tex files
+// inconsistently (application/x-tex, text/plain, application/octet-stream), but
+// the extension is reliable.
+const allowedExtensions = {
+  resume: ['.pdf', '.tex'],
+  jd_file: ['.pdf', '.txt']
+};
 
-  const allowedTypesForField = allowedMimeTypes[file.fieldname];
-  
-  if (allowedTypesForField && allowedTypesForField.includes(file.mimetype)) {
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const allowed = allowedExtensions[file.fieldname] || [];
+
+  if (allowed.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file type for ${file.fieldname}. Allowed types are ${allowedTypesForField?.join(', ') || 'none'}.`), false);
+    cb(new Error(`Invalid file type for ${file.fieldname}. Allowed types are ${allowed.join(', ') || 'none'}.`), false);
   }
 };
 

@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { UploadCloud, FileText, CheckCircle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-function DropZone({ label, hint, accept, file, onDrop, onClear }) {
+function DropZone({ label, hint, tag, accept, file, onDrop, onClear }) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (accepted) => {
       if (accepted.length > 0) onDrop(accepted[0]);
@@ -21,7 +21,7 @@ function DropZone({ label, hint, accept, file, onDrop, onClear }) {
       {file ? (
         <div className="bg-white border border-stone-200 p-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <CheckCircle size={20} strokeWidth={1.5} className="text-green-600" />
+            <CheckCircle size={20} strokeWidth={1.5} className="text-blue-700" />
             <div>
               <p className="text-sm font-medium text-stone-900">{file.name}</p>
               <p className="text-xs text-stone-400 mt-0.5">
@@ -55,6 +55,11 @@ function DropZone({ label, hint, accept, file, onDrop, onClear }) {
             {isDragActive ? 'Drop file here' : 'Drag & drop or click to browse'}
           </p>
           <p className="text-xs text-stone-400">{hint}</p>
+          {tag && (
+            <span className="inline-block mt-3 font-mono text-xs font-medium tracking-wider uppercase text-stone-500 border border-stone-200 bg-white px-2 py-1">
+              {tag}
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -92,10 +97,10 @@ export default function Upload() {
       }
 
       const data = await response.json();
-      console.log("🚀 BACKEND PAYLOAD:", data);
+      console.log("[upload] backend payload:", data);
       navigate('/editor', { state: { criticData: data } });
     } catch (err) {
-      console.error("❌ UPLOAD API ERROR:", err);
+      console.error("[upload] API error:", err);
       const errMsg = err.message || 'An unexpected error occurred.';
       setError(errMsg);
       alert(errMsg);
@@ -112,8 +117,9 @@ export default function Upload() {
           Align your experience.
         </h1>
         <p className="text-base font-normal leading-relaxed text-stone-500 max-w-[65ch]">
-          Upload your current resume and the target job description. The AI engine will analyze
-          both documents and generate an optimized, JD-aligned version of your resume.
+          Upload your raw LaTeX (.tex) source and the target job description. The AI engine
+          rewrites content inside each section — never the layout — so the original ATS-ready
+          formatting of your document survives untouched.
         </p>
       </div>
 
@@ -128,8 +134,13 @@ export default function Upload() {
         {/* Resume Dropzone */}
         <DropZone
           label="Resume"
-          hint="PDF only — max 10 MB"
-          accept={{ 'application/pdf': ['.pdf'] }}
+          hint="Raw .tex source — flawless ATS formatting"
+          tag=".tex"
+          accept={{
+            'application/x-tex': ['.tex'],
+            'text/plain': ['.tex'],
+            'application/octet-stream': ['.tex'],
+          }}
           file={resumeFile}
           onDrop={setResumeFile}
           onClear={() => setResumeFile(null)}
@@ -140,6 +151,7 @@ export default function Upload() {
           <DropZone
             label="Job Description"
             hint="PDF or TXT"
+            tag=".pdf · .txt"
             accept={{
               'application/pdf': ['.pdf'],
               'text/plain': ['.txt'],
@@ -186,9 +198,9 @@ export default function Upload() {
       {!canGenerate && (
         <p className="text-xs text-stone-400 mt-3">
           {!hasResume && !hasJd
-            ? 'Upload a resume and provide a job description to begin.'
+            ? 'Upload the .tex source and provide a job description to begin.'
             : !hasResume
-            ? 'Upload your resume to continue.'
+            ? 'Upload your .tex source to continue.'
             : 'Provide a job description to continue.'}
         </p>
       )}

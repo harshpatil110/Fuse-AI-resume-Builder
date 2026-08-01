@@ -53,11 +53,20 @@ router.post('/upload', (req, res) => {
         jd_text: jdText || 'Job description provided via file',
       });
 
+      // Step 2.5: For LaTeX resumes, keep the raw .tex template so the Editor can
+      // re-inject rewritten sections and recompile via /api/compile.
+      let texTemplate = null;
+      if (resumeFile && /\.tex$/i.test(resumeFile.originalname)) {
+        texTemplate = fs.readFileSync(resumeFile.path, 'utf-8');
+      }
+
       // Step 3: Return the complete payload to the frontend
       res.json({
         parsed_resume: extractedData,
         critique: criticResponse.data.critique,
-        jd_text: jdText || null
+        jd_text: jdText || null,
+        format: extractedData?.format || 'pdf',
+        tex_template: texTemplate
       });
 
     } catch (error) {
