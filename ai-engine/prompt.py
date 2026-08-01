@@ -9,6 +9,19 @@ import os
 from dotenv import load_dotenv
 from models import ModelProvider
 
+# ── Immutable-content guardrail ───────────────────────────────────────────────
+# Injected verbatim into every Critic / Writer agent system prompt and prompt
+# template. Contact information, portfolio links, education details and awards
+# are non-negotiable personal data that the LLM must never summarize, truncate
+# or omit. (See latex_parser.is_protected_title for the matching code-level
+# quarantine.) Modification is limited to Experience and Projects bullet points.
+IMMUTABLE_CONTENT_CONSTRAINT = (
+    "You are strictly forbidden from summarizing, truncating, or omitting "
+    "contact information, portfolio links, education details, and awards. "
+    "Your scope of modification is exclusively limited to the bullet points "
+    "within the Experience and Projects sections."
+)
+
 # Load environment variables
 load_dotenv()
 

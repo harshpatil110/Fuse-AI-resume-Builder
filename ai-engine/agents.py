@@ -6,6 +6,7 @@ Houses the multi-agent workflow: Critic Agent, Writer Agent, etc.
 
 import json
 import logging
+from prompt import IMMUTABLE_CONTENT_CONSTRAINT
 from prompts.template_manager import TemplateManager
 from llm_utils import generate_json_completion
 from resume_evaluator import evaluate_resume
@@ -32,7 +33,8 @@ async def run_critic_agent(resume_json: dict, jd_text: str) -> dict:
     system_message = (
         "You are a Ruthless but Constructive Senior Technical Recruiter. "
         "You analyze resumes against job descriptions and return ONLY valid JSON. "
-        "Never include markdown formatting, code fences, or conversational text."
+        "Never include markdown formatting, code fences, or conversational text. "
+        f"{IMMUTABLE_CONTENT_CONSTRAINT}"
     )
 
     prompt = template_manager.render_template(
@@ -99,7 +101,8 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
     system_message = (
         "You are an Elite Career Consultant and Senior Technical Resume Writer. "
         "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
-        "Never include markdown formatting, code fences, or conversational text."
+        "Never include markdown formatting, code fences, or conversational text. "
+        f"{IMMUTABLE_CONTENT_CONSTRAINT}"
     )
 
     prompt = template_manager.render_template(
@@ -131,7 +134,8 @@ async def run_writer_agent_with_feedback(
     system_message = (
         "You are an Elite Career Consultant and Senior Technical Resume Writer. "
         "You rewrite resumes to perfectly align with job descriptions and return ONLY valid JSON. "
-        "Never include markdown formatting, code fences, or conversational text."
+        "Never include markdown formatting, code fences, or conversational text. "
+        f"{IMMUTABLE_CONTENT_CONSTRAINT}"
     )
 
     feedback_block = ""
