@@ -411,3 +411,27 @@ def inject_editable_sections(
         tex_string = tex_string[:start] + replacement + tex_string[end:]
 
     return tex_string
+
+
+def append_to_section(
+    tex_string: str,
+    title: str,
+    extra: str,
+    section_commands: Sequence[str] = DEFAULT_SECTION_COMMANDS,
+) -> str:
+    """Append ``extra`` to the end of a named section's body (case-insensitive).
+
+    Used to inject GitHub project blocks into the PROJECTS section without
+    overwriting the user's existing content. If the section is absent (or is a
+    protected read-only section), the template is returned unchanged.
+    """
+    spans = find_sections(tex_string, section_commands)
+    for span in spans:
+        if span.title.strip().lower() == title.strip().lower():
+            if is_protected_title(span.title):
+                return tex_string
+            body = tex_string[span.body_start : span.body_end]
+            insertion = f"\n{extra.strip()}\n" if body.strip() else f"\n{extra.strip()}\n"
+            new_body = body.rstrip() + insertion
+            return tex_string[: span.body_start] + new_body + tex_string[span.body_end :]
+    return tex_string

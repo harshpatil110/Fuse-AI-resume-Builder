@@ -334,19 +334,26 @@ _NUMBER_RE = re.compile(
 _SAFE_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 _CLAUSE_SPLIT_RE = re.compile(r"(?<=[,;.])\s+")
 _CONJUNCTION_RE = re.compile(r"\s+(?:and|but|also|then|while|plus)\s+", re.IGNORECASE)
+# LaTeX artifacts that wrap or glue metric tokens in the source .tex: control
+# sequences (backslashes), math-mode markers ("$"), tildes/non-breaking spaces
+# ("~", "\sim") and plus/minus signs. Replaced with spaces (not removed) so
+# ranges like "5-10" still read as two numbers.
+_LATEX_ARTIFACT_RE = re.compile(r"[\\~$+\-]")
 
 
 def normalize_metric_text(text: str) -> str:
     """Normalize metric text so equivalent number representations compare equal.
 
-    "30 percent" / "30 per cent" collapse to "30%" and the Unicode multiply
-    sign "×" becomes "x". Applied to BOTH original and generated text before
-    extraction, so a fact written "30 percent" and one written "30%" compare as
-    the same number. Character case is preserved so reported tokens keep their
-    original spelling ("15L", "5K"); :func:`_canonical_number` lowercases
-    internally for comparison.
+    Strips LaTeX artifacts (backslashes, math-mode ``$`` markers, tildes and
+    ``\\sim``, plus/minus signs) from BOTH sides before extraction, so a metric
+    written ``60\\%`` or ``$\\sim$60\\%`` in the original source LaTeX compares
+    equal to the LLM's clean ``60%``. "30 percent" collapses to "30%" and the
+    Unicode multiply sign "×" becomes "x". Character case is preserved so
+    reported tokens keep their original spelling ("15L", "5K");
+    :func:`_canonical_number` lowercases internally for comparison.
     """
     t = text or ""
+    t = _LATEX_ARTIFACT_RE.sub(" ", t)
     t = re.sub(r"\s*per\s*cent\b", "%", t, flags=re.IGNORECASE)
     t = t.replace("×", "x")
     return t
@@ -360,16 +367,21 @@ def extract_numbers(text: str) -> List[str]:
 def _canonical_number(token: str) -> str:
     """Canonical form so equivalent representations of a number compare equal.
 
-    Strips comma grouping ("50,000" -> "50000"), scales "k"/"K" to thousands,
-    uppercase "M" to millions and "l"/"L" to lakhs, trims trailing zeros on
-    decimals ("3.50" -> "3.5") and folds ordinals ("1st" -> "1"). The percent
-    and multiplier qualifiers ("30%", "1.5x") are preserved, so adding a "%" to
-    a number is still detected as a change. Lowercase "m" is left as-is — it is
+    Comparison is on the pure numeric value: the percent and multiplier
+    qualifiers ("30%", "1.5x") are dropped, so a LaTeX ``60\\%`` (extracted as
+    "60") and the LLM's clean ``60%`` both reduce to "60". Comma grouping is
+    stripped ("50,000" -> "50000"), "k"/"K" scales to thousands, uppercase "M"
+    to millions and "l"/"L" to lakhs, decimals trim trailing zeros ("3.50" ->
+    "3.5") and ordinals fold ("1st" -> "1"). Lowercase "m" is left as-is — it is
     ambiguous (minutes vs meters vs million).
     """
     t = token.replace(",", "").replace("×", "x")
     original = t  # keep case for the M/m disambiguation below
     t = t.lower()
+    if t.endswith("%"):
+        t = t[:-1]
+    elif t.endswith("x"):
+        t = t[:-1]
     if t.endswith(("st", "nd", "rd", "th")):
         t = t[:-2]
     elif t.endswith("k"):
@@ -407,9 +419,10 @@ def verify_metrics_integrity(original_text: str, generated_text: str) -> List[st
     Years (1900-2099) are treated as safe generic numbers and ignored. Any
     returned number is a potentially fabricated metric — e.g. a "30%" latency
     reduction that never appeared in the candidate's real resume. Comparison is
-    representation-normalized (:func:`_canonical_number`), so "50,000" and "50k"
-    are treated as the same fact, while "30" vs "30%" (a newly invented
-    percentage) are not.
+    on the pure numeric value (:func:`_canonical_number` drops the "%"/"x"
+    qualifiers), so LaTeX ``60\\%`` in the original and the LLM's clean ``60%``
+    compare equal, and "50,000" / "50k" are the same fact. Only a genuinely new
+    numeric value (e.g. "45%" when the original has "30") is flagged.
     """
     orig_norm = normalize_metric_text(original_text)
     gen_norm = normalize_metric_text(generated_text)

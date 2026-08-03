@@ -8,8 +8,15 @@ import os
 import shutil
 from uuid import uuid4
 from pdf import extract_resume_data
-from agents import run_critic_agent, run_github_matching_agent, generate_and_qa_resume
+from agents import (
+    generate_and_qa_resume,
+    rewrite_latex_sections,
+    run_critic_agent,
+    run_github_matching_agent,
+)
 import latex_parser
+import github_fetch
+from llm_utils import generate_completion
 from compiler import compile_tex_to_pdf, LatexCompileError
 
 app = FastAPI(title="Fuse AI Engine")
@@ -49,6 +56,14 @@ class ParseTexRequest(BaseModel):
 class CompileTexRequest(BaseModel):
     tex: str = Field(..., max_length=10_000_000)
     sections: Optional[Dict[str, str]] = None
+    github_repos: Optional[list] = None
+    jd_text: Optional[str] = None
+
+
+class RewriteLatexRequest(BaseModel):
+    tex: str = Field(..., max_length=10_000_000)
+    jd_text: str
+    github_repos: Optional[list] = None
 
 
 @app.post("/process-resume")
@@ -209,27 +224,77 @@ async def parse_tex(request: ParseTexRequest):
         raise HTTPException(status_code=500, detail=f"Failed to parse LaTeX: {str(e)}")
 
 
+@app.post("/api/rewrite-latex")
+async def rewrite_latex(request: RewriteLatexRequest):
+    """Surgically rewrite ONLY the EXPERIENCE and PROJECTS LaTeX section bodies.
+
+    Only the extracted section text is sent to the LLM — never the preamble or
+    any other section — so the user's custom formatting and immutable personal
+    data are preserved. Returns the new section bodies ready for
+    ``/api/compile-tex``, plus the read-only blocks and link placeholders.
+    """
+    try:
+        sections, link_map = await rewrite_latex_sections(
+            request.tex, request.jd_text, request.github_repos or []
+        )
+        safe_tex, _ = latex_parser.protect_links(request.tex)
+        read_only = latex_parser.extract_protected_sections(safe_tex)
+        return {
+            "status": "success",
+            "sections": sections,
+            "read_only_sections": read_only,
+            "link_placeholders": link_map,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LaTeX rewrite failed: {str(e)}")
+
+
+def _inject_github_into_tex(tex: str, github_repos: list, jd_text: str) -> str:
+    """Enrich selected repos, generate bullets, and append them to PROJECTS."""
+    repos = github_fetch.enrich_repos(github_repos)
+    if not repos:
+        return tex
+    bullets = github_fetch.generate_github_bullets(repos, jd_text, generate_completion)
+    blocks = [
+        github_fetch.build_project_heading(
+            repo, bullets.get(repo["name"]) or [repo.get("description") or repo["name"]]
+        )
+        for repo in repos
+    ]
+    return latex_parser.append_to_section(tex, "projects", "\n".join(blocks))
+
+
 @app.post("/api/compile-tex")
 async def compile_tex(request: CompileTexRequest):
     """Re-inject rewritten section bodies into a LaTeX template and compile to PDF.
 
     Returns the compiled PDF as a binary response. If ``sections`` is provided,
     the bodies are merged into the template first via ``inject_editable_sections``;
-    otherwise ``tex`` is compiled as-is. Read-only sections are never overwritten
-    and hyperlink placeholders are restored before compilation.
+    otherwise ``tex`` is compiled as-is. If ``github_repos`` is provided, repo
+    metadata is fetched/enriched and each repo is rendered as a
+    ``\\resumeProjectHeading`` / ``\\resumeItemListStart`` / ``\\resumeItem`` /
+    ``\\resumeItemListEnd`` block appended to the PROJECTS section. Read-only
+    sections are never overwritten and hyperlink placeholders are restored
+    before compilation.
     """
     try:
         # Protect raw hyperlinks first so the injected editable bodies (which the
         # LLM may have sent back with [[LINK_N]] tokens) map back to the original
         # \href commands deterministically.
         safe_tex, link_map = latex_parser.protect_links(request.tex)
-        if request.sections:
-            total = sum(len(value) for value in request.sections.values())
+        sections = request.sections or {}
+        if sections:
+            total = sum(len(value) for value in sections.values())
             if total > 10_000_000:
                 raise HTTPException(status_code=413, detail="Sections payload too large.")
-            merged = latex_parser.inject_editable_sections(safe_tex, request.sections)
+            merged = latex_parser.inject_editable_sections(safe_tex, sections)
         else:
             merged = safe_tex
+
+        if request.github_repos:
+            merged = _inject_github_into_tex(merged, request.github_repos, request.jd_text or "")
 
         merged = latex_parser.restore_links(merged, link_map)
         pdf_bytes = compile_tex_to_pdf(merged)
