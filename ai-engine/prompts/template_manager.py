@@ -48,6 +48,7 @@ class TemplateManager:
             "critic_agent": "critic_agent.jinja",
             "github_matching_agent": "github_matching_agent.jinja",
             "writer_agent": "writer_agent.jinja",
+            "latex_writer_agent": "latex_writer_agent.jinja",
         }
 
         for section_name, filename in template_files.items():

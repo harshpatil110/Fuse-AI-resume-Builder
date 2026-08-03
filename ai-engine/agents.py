@@ -6,6 +6,9 @@ Houses the multi-agent workflow: Critic Agent, Writer Agent, etc.
 
 import json
 import logging
+from typing import Dict, Sequence
+
+import latex_parser
 from prompt import (
     IMMUTABLE_CONTENT_CONSTRAINT,
     METRIC_FABRICATION_CONSTRAINT,
@@ -96,6 +99,73 @@ async def run_github_matching_agent(github_repos: list, jd_text: str) -> dict:
     logger.info(f"GitHub Matching Agent selected {len(result.get('selected_projects', []))} projects.")
 
     return result
+
+
+async def rewrite_latex_sections(
+    tex_string: str,
+    jd_text: str,
+    github_projects: list,
+    section_titles: Sequence[str] = ("experience", "projects"),
+) -> tuple:
+    """Surgically rewrite the EXPERIENCE/PROJECTS LaTeX section bodies via the LLM.
+
+    Only the extracted section bodies are sent to the model — never the preamble
+    or any other section — so the user's custom formatting and immutable
+    personal data cannot be corrupted. The LLM is instructed to mirror the exact
+    custom macros (``\\resumeSubheading``, ``\\resumeItem``, ...) used in the
+    original bodies.
+
+    Returns ``(new_sections: {title: body}, link_map)``; ``new_sections`` only
+    ever contains the requested section titles.
+    """
+    safe_tex, link_map = latex_parser.protect_links(tex_string)
+    editable = latex_parser.extract_editable_sections(
+        safe_tex, include_protected=False
+    )
+    wanted_titles = {t.lower() for t in section_titles}
+    wanted = {
+        title: body
+        for title, body in editable.items()
+        if title.strip().lower() in wanted_titles
+    }
+    if not wanted:
+        return {}, link_map
+
+    section_bodies = "\n\n".join(
+        f"<SECTION: {title}>\n{body}\n</SECTION>"
+        for title, body in wanted.items()
+    )
+    prompt = template_manager.render_template(
+        "latex_writer_agent",
+        section_bodies=section_bodies,
+        jd_text=jd_text,
+        github_projects=(
+            json.dumps(github_projects, indent=2) if github_projects else "None"
+        ),
+    )
+    if prompt is None:
+        raise ValueError("Failed to render latex_writer_agent template.")
+
+    system_message = (
+        "You are an Elite Career Consultant and Senior Technical Resume Writer. "
+        "You surgically rewrite LaTeX resume section bodies and return ONLY valid JSON. "
+        f"{IMMUTABLE_CONTENT_CONSTRAINT} {METRIC_FABRICATION_CONSTRAINT} "
+        f"{SKILL_GROUNDING_CONSTRAINT}"
+    )
+
+    logger.info("Running LaTeX Section Writer Agent...")
+    result = generate_json_completion(prompt, system_message)
+    result_sections = result.get("sections", {}) if isinstance(result, dict) else {}
+    cleaned: Dict[str, str] = {}
+    for title, body in result_sections.items():
+        if (
+            title.strip().lower() in wanted_titles
+            and isinstance(body, str)
+            and body.strip()
+        ):
+            cleaned[title] = body.strip()
+    logger.info("LaTeX Section Writer returned %s section(s).", len(cleaned))
+    return cleaned, link_map
 
 
 async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_projects: dict) -> dict:
