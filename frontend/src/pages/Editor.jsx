@@ -547,6 +547,10 @@ export default function Editor() {
 
     setIsRewriting(true);
     setErrorMessage(null);
+    // The multi-agent LLM workflow (Writer + QA loop) can take minutes.
+    // Give it up to 5 minutes before aborting, matching the gateway timeout.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
     try {
       console.log('📤 REWRITE PAYLOAD BEING SENT:', { parsedResume, jdText, criticFeedback });
       const response = await fetch('http://localhost:5000/api/rewrite', {
@@ -558,6 +562,7 @@ export default function Editor() {
           jdText,
           criticFeedback,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -570,9 +575,15 @@ export default function Editor() {
       setResumeData(rewritten);
       setViewMode('form');
     } catch (err) {
-      console.error('Rewrite failed:', err);
-      setErrorMessage(err.message || 'Failed to rewrite resume. Please try again.');
+      const detail = err?.response?.data || err?.message || err;
+      console.error('Rewrite failed:', detail);
+      if (err?.name === 'AbortError') {
+        setErrorMessage('The rewrite took too long and timed out. Please try again.');
+      } else {
+        setErrorMessage(err?.message || 'Failed to rewrite resume. Please try again.');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setIsRewriting(false);
     }
   };

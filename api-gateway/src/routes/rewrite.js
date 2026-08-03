@@ -34,7 +34,10 @@ router.post('/rewrite', async (req, res) => {
           ? selected_github_projects
           : [],
       },
-      { timeout: 180000 }
+      // The multi-agent LLM workflow (Writer + QA loop, possibly on a large
+      // model) can take minutes. 5 minutes gives it room without closing the
+      // connection before the Python engine finishes.
+      { timeout: 300000 }
     );
 
     res.json(aiResponse.data);

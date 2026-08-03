@@ -21,9 +21,16 @@ router.post('/compile', async (req, res) => {
       return res.status(400).json({ error: 'tex is required' });
     }
 
+    // Forward GitHub repo selections + JD so the AI engine can fetch repo data,
+    // generate bullets, and inject \\resumeProjectHeading blocks into PROJECTS.
     const aiResponse = await axios.post(
       'http://localhost:8000/api/compile-tex',
-      { tex, sections },
+      {
+        tex,
+        sections,
+        github_repos: body.github_repos || [],
+        jd_text: body.jd_text || '',
+      },
       { responseType: 'arraybuffer', timeout: 180000 }
     );
 
