@@ -18,66 +18,6 @@ import {
   Loader2,
 } from 'lucide-react';
 
-// ── Mock Data ──
-const MOCK_CRITIQUE = {
-  overall_match_score: 62,
-  summary:
-    'The resume demonstrates solid frontend experience but critically lacks backend and database keywords required by the JD. Several bullet points use passive verbs that fail to demonstrate ownership or measurable impact.',
-  missing_keywords: [
-    'PostgreSQL',
-    'Drizzle ORM',
-    'Docker',
-    'CI/CD',
-    'Redis',
-    'GraphQL',
-    'Microservices',
-    'Load Balancing',
-  ],
-  weak_verbs_found: [
-    {
-      original: 'Helped build the user authentication system using JWT tokens.',
-      suggestion: 'Engineered a stateless JWT-based authentication system serving 12k daily active users.',
-      reason: 'The JD requires candidates who demonstrate ownership of backend systems. "Helped" implies a supporting role.',
-    },
-    {
-      original: 'Worked on improving page load performance across the platform.',
-      suggestion: 'Optimized critical rendering path, reducing page load time by 40% across 15 routes.',
-      reason: 'The JD emphasizes measurable impact on performance. "Worked on" is vague and lacks quantifiable results.',
-    },
-  ],
-  irrelevant_experience: [],
-};
-
-const MOCK_RESUME_SECTIONS = [
-  {
-    title: 'Summary',
-    content:
-      'Full-stack developer with 3 years of experience in React and Node.js. Passionate about building clean, user-friendly web applications.',
-  },
-  {
-    title: 'Experience',
-    company: 'TechCorp Inc.',
-    role: 'Software Engineer',
-    period: 'Jan 2022 — Present',
-    bullets: [
-      'Helped build the user authentication system using JWT tokens.',
-      'Developed and shipped 8 React components for the customer-facing dashboard.',
-      'Worked on improving page load performance across the platform.',
-      'Collaborated with the design team to implement a responsive layout system.',
-    ],
-  },
-  {
-    title: 'Experience',
-    company: 'StartupXYZ',
-    role: 'Junior Developer',
-    period: 'Jun 2020 — Dec 2021',
-    bullets: [
-      'Built REST APIs using Express.js for the core product features.',
-      'Wrote unit tests using Jest achieving 85% code coverage.',
-    ],
-  },
-];
-
 // ── Reusable form primitives ──
 function FieldLabel({ children }) {
   return (
@@ -491,6 +431,80 @@ function FormEditor({ resume, setResume, onExport, isExporting }) {
   );
 }
 
+// ── Original resume panel ──
+// Renders whatever shape the backend actually extracted: a raw string, the
+// LaTeX section dictionary, or a generic object of text fields. Never falls
+// back to placeholder data.
+function renderResumeContent(parsedResume) {
+  if (parsedResume === null || parsedResume === undefined || parsedResume === '') {
+    return <p className="text-stone-500 italic">No original resume text could be extracted.</p>;
+  }
+
+  // Pure string (raw .tex source, raw_text, or location.state.resume_text).
+  if (typeof parsedResume === 'string') {
+    return (
+      <div className="whitespace-pre-wrap font-mono text-xs text-stone-700">
+        {parsedResume}
+      </div>
+    );
+  }
+
+  // Top-level array of chunks — render each item as its own block.
+  if (Array.isArray(parsedResume)) {
+    if (parsedResume.length === 0) {
+      return <p className="text-stone-500 italic">No original resume text could be extracted.</p>;
+    }
+    return (
+      <div className="whitespace-pre-wrap text-sm text-stone-700">
+        {parsedResume.map((item, i) => (
+          <div key={i} className="mb-4">
+            {typeof item === 'string' ? item : JSON.stringify(item, null, 2)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (typeof parsedResume !== 'object') {
+    return <p className="text-stone-500 italic">No original resume text could be extracted.</p>;
+  }
+
+  // Object of sections. Prefer the section dictionaries the LaTeX parser
+  // produces, then the full-text keys, then any remaining top-level text fields.
+  const sectionEntries = [
+    ...Object.entries(parsedResume.sections || {}),
+    ...Object.entries(parsedResume.read_only_sections || {}),
+  ];
+  let entries = sectionEntries;
+
+  if (entries.length === 0 && typeof (parsedResume.raw_tex || parsedResume.raw_text) === 'string') {
+    entries = [['Extracted Resume', parsedResume.raw_tex || parsedResume.raw_text]];
+  }
+
+  if (entries.length === 0) {
+    const META_KEYS = new Set([
+      'format', 'pages', 'metadata', 'chunks', 'link_placeholders',
+      'sections', 'read_only_sections', 'raw_tex', 'raw_text',
+    ]);
+    entries = Object.entries(parsedResume).filter(
+      ([key, value]) => !META_KEYS.has(key) && typeof value === 'string' && value.trim()
+    );
+  }
+
+  if (entries.length === 0) {
+    return <p className="text-stone-500 italic">No original resume text could be extracted.</p>;
+  }
+
+  return entries.map(([section, content], index) => (
+    <div key={`${section}-${index}`} className="mb-6">
+      <h3 className="text-xs font-bold uppercase tracking-widest text-stone-900 mb-2">
+        {section === '__contact_header__' ? 'Contact' : section}
+      </h3>
+      <div className="whitespace-pre-wrap text-sm text-stone-700">{content}</div>
+    </div>
+  ));
+}
+
 // ── Component ──
 export default function Editor() {
   const location = useLocation();
@@ -499,17 +513,16 @@ export default function Editor() {
   const criticData = location.state?.criticData;
   const rawData = criticData || {};
 
-  // Backend sends parsed_resume as a dict ({ raw_text, pages, metadata, chunks }) —
-  // normalize to an array of sections so the resume panel never calls .map on a non-array.
-  const rawParsed = rawData.parsed_resume || rawData.parsedResume;
-  const initialSections = Array.isArray(rawParsed)
-    ? rawParsed
-    : rawParsed && typeof rawParsed === 'object' && rawParsed.raw_text
-    ? [{ title: 'Extracted Resume', content: rawParsed.raw_text }]
-    : MOCK_RESUME_SECTIONS;
+  // The backend sends the original resume in whatever shape it extracted:
+  // PDF → { raw_text, pages, metadata, chunks }; LaTeX → { format, raw_tex,
+  // sections, read_only_sections, link_placeholders, chunks }. The panel below
+  // renders it dynamically — string, section dict, or fallback message.
+  const parsedResume =
+    rawData.parsed_resume ||
+    rawData.parsedResume ||
+    location.state?.resume_text;
 
-  const [critique] = useState(rawData.critique || MOCK_CRITIQUE);
-  const [resumeSections] = useState(initialSections);
+  const [critique] = useState(rawData.critique);
 
   const [viewMode, setViewMode] = useState('critique');
   const [isRewriting, setIsRewriting] = useState(false);
@@ -651,29 +664,6 @@ export default function Editor() {
     );
   }
 
-  const weakPhrases = (critique?.weak_verbs_found || []).map((v) => v.original);
-  const irrelevantCompanies = (critique?.irrelevant_experience || []).map((e) =>
-    e.item?.split('(')[0]?.trim().split(' at ').pop()?.trim()
-  );
-
-  const highlightText = (text) => {
-    for (const phrase of weakPhrases) {
-      if (text === phrase) {
-        return (
-          <span className="bg-blue-50 border-b-2 border-blue-200 text-stone-900 px-0.5">
-            {text}
-          </span>
-        );
-      }
-    }
-    return text;
-  };
-
-  const isIrrelevantSection = (section) => {
-    if (!section.company) return false;
-    return irrelevantCompanies.some((c) => c && section.company.includes(c));
-  };
-
   const scoreColor =
     (critique?.overall_match_score || 0) >= 80
       ? 'text-green-700'
@@ -730,50 +720,7 @@ export default function Editor() {
             Original Resume
           </p>
 
-          {resumeSections.map((section, i) => {
-            const irrelevant = isIrrelevantSection(section);
-            return (
-              <div
-                key={i}
-                className={`mb-8 ${
-                  irrelevant ? 'border-l-2 border-red-300 pl-4 opacity-60' : ''
-                }`}
-              >
-                {section.company ? (
-                  <>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <h3 className="text-base font-semibold tracking-tight text-stone-900">
-                        {section.role}
-                      </h3>
-                      <span className="text-xs text-stone-400">{section.period}</span>
-                    </div>
-                    <p className="text-sm text-stone-500 mb-3">{section.company}</p>
-                    {irrelevant && (
-                      <p className="text-xs text-red-500 mb-2 flex items-center gap-1">
-                        <XCircle size={12} strokeWidth={1.5} />
-                        Flagged as irrelevant by AI
-                      </p>
-                    )}
-                    <ul className="space-y-2">
-                      {section.bullets.map((bullet, j) => (
-                        <li key={j} className="text-sm text-stone-700 leading-relaxed flex gap-2">
-                          <span className="text-stone-300 mt-0.5">•</span>
-                          <span>{highlightText(bullet)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="text-xs font-medium tracking-widest uppercase text-stone-400 mb-2">
-                      {section.title}
-                    </h3>
-                    <p className="text-sm text-stone-700 leading-relaxed">{section.content}</p>
-                  </>
-                )}
-              </div>
-            );
-          })}
+          {renderResumeContent(parsedResume)}
         </div>
 
         {/* ── Right Panel: Critic Feedback ── */}
