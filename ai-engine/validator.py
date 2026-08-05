@@ -335,24 +335,30 @@ _SAFE_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 _CLAUSE_SPLIT_RE = re.compile(r"(?<=[,;.])\s+")
 _CONJUNCTION_RE = re.compile(r"\s+(?:and|but|also|then|while|plus)\s+", re.IGNORECASE)
 # LaTeX artifacts that wrap or glue metric tokens in the source .tex: control
-# sequences (backslashes), math-mode markers ("$"), tildes/non-breaking spaces
-# ("~", "\sim") and plus/minus signs. Replaced with spaces (not removed) so
-# ranges like "5-10" still read as two numbers.
+# sequences ("\sim", "\textbf", ...) with an optional trailing space, the bare
+# backslash of non-alpha escapes ("\%"), math-mode markers ("$"), tildes /
+# non-breaking spaces ("~") and plus/minus signs. Control words are replaced
+# with a space FIRST so a number glued directly to one ("\sim60") still extracts
+# as a standalone token; the remaining single-character artifacts are then
+# replaced with spaces so ranges like "5-10" still read as two numbers.
+_LATEX_CONTROL_WORD_RE = re.compile(r"\\[a-zA-Z]+\s*")
 _LATEX_ARTIFACT_RE = re.compile(r"[\\~$+\-]")
 
 
 def normalize_metric_text(text: str) -> str:
     """Normalize metric text so equivalent number representations compare equal.
 
-    Strips LaTeX artifacts (backslashes, math-mode ``$`` markers, tildes and
-    ``\\sim``, plus/minus signs) from BOTH sides before extraction, so a metric
-    written ``60\\%`` or ``$\\sim$60\\%`` in the original source LaTeX compares
-    equal to the LLM's clean ``60%``. "30 percent" collapses to "30%" and the
-    Unicode multiply sign "×" becomes "x". Character case is preserved so
-    reported tokens keep their original spelling ("15L", "5K");
-    :func:`_canonical_number` lowercases internally for comparison.
+    Strips LaTeX artifacts (control sequences like ``\\sim`` and ``\\textbf``,
+    math-mode ``$`` markers, tildes and plus/minus signs) from BOTH sides before
+    extraction, so a metric written ``60\\%``, ``$\\sim$60\\%`` or ``\\sim60``
+    in the original source LaTeX compares equal to the LLM's clean ``60%``.
+    "30 percent" collapses to "30%" and the Unicode multiply sign "×" becomes
+    "x". Character case is preserved so reported tokens keep their original
+    spelling ("15L", "5K"); :func:`_canonical_number` lowercases internally
+    for comparison.
     """
     t = text or ""
+    t = _LATEX_CONTROL_WORD_RE.sub(" ", t)
     t = _LATEX_ARTIFACT_RE.sub(" ", t)
     t = re.sub(r"\s*per\s*cent\b", "%", t, flags=re.IGNORECASE)
     t = t.replace("×", "x")
