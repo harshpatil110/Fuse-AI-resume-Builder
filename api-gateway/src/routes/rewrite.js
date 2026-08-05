@@ -9,6 +9,12 @@ const router = express.Router();
  * and returns the rewritten resume JSON to the frontend.
  */
 router.post('/rewrite', async (req, res) => {
+  // The QA loop can run for several minutes (up to 3 Writer attempts on a large
+  // NIM model). Lengthen the Express socket timeouts so the server itself never
+  // drops the connection before Python returns.
+  req.setTimeout(600000);
+  res.setTimeout(600000);
+
   try {
     const body = req.body || {};
 
@@ -35,14 +41,32 @@ router.post('/rewrite', async (req, res) => {
           : [],
       },
       // The multi-agent LLM workflow (Writer + QA loop, possibly on a large
-      // model) can take minutes. 5 minutes gives it room without closing the
-      // connection before the Python engine finishes.
-      { timeout: 300000 }
+      // model) can take minutes. 10 minutes gives the QA loop room to finish
+      // without axios closing the socket first. maxBodyLength/maxContentLength
+      // stay unbounded so large parsed resumes + rewritten JSON are not rejected.
+      {
+        timeout: 600000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
     );
 
     res.json(aiResponse.data);
   } catch (error) {
-    console.error('Rewrite proxy failed:', error.response?.data || error.message);
+    // Detailed diagnostics: exact reason, code (ECONNRESET / ECONNREFUSED /
+    // ETIMEDOUT / AxiosError), stack, and the engine's response body when one
+    // was actually received. Distinguishes a timeout/reset from an engine
+    // rejection (422/500) without guessing.
+    console.error('❌ Rewrite proxy failed');
+    console.error('  message :', error.message);
+    console.error('  code    :', error.code);
+    console.error('  stack   :', error.stack);
+    if (error.response) {
+      console.error('  engine status:', error.response.status);
+      console.error('  engine body  :', JSON.stringify(error.response.data));
+    } else {
+      console.error('  (no HTTP response from engine — connection error/timeout)');
+    }
     res.status(500).json({ error: 'Failed to rewrite resume' });
   }
 });
