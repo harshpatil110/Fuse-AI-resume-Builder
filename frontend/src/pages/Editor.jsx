@@ -561,9 +561,9 @@ export default function Editor() {
     setIsRewriting(true);
     setErrorMessage(null);
     // The multi-agent LLM workflow (Writer + QA loop) can take minutes.
-    // Give it up to 5 minutes before aborting, matching the gateway timeout.
+    // Give it up to 10 minutes before aborting, matching the gateway timeout.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 300000);
+    const timeoutId = setTimeout(() => controller.abort(), 600000);
     try {
       console.log('📤 REWRITE PAYLOAD BEING SENT:', { parsedResume, jdText, criticFeedback });
       const response = await fetch('http://localhost:5000/api/rewrite', {
