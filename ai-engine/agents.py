@@ -30,7 +30,22 @@ logger = logging.getLogger(__name__)
 
 template_manager = TemplateManager()
 
-QA_SCORE_THRESHOLD = 85
+# Hard directive for the Writer Agent: skills must be demonstrated inside
+# Experience/Project bullet points, never just appended to the Skills list.
+# The Grounding Validator (validator.ground_resume_skills) deletes any skill
+# not present in the generated bullet text, so appending bare skills makes the
+# draft fail evaluation and re-triggers the QA loop.
+GROUNDING_VALIDATOR_RULE = (
+    "CRITICAL RULE: The system utilizes a Grounding Validator. "
+    "If the Critic Agent instructs you to add missing technical skills "
+    "(e.g., Python, LangGraph), you CANNOT simply append them to the Skills "
+    "section. You MUST organically rewrite an Experience or Project bullet "
+    "point to demonstrate how that skill was used. Any skill listed in the "
+    "Skills section that is not explicitly present in your bullet points will "
+    "be automatically deleted, causing you to fail the evaluation."
+)
+
+QA_SCORE_THRESHOLD = 75
 QA_MAX_RETRIES = 2
 
 
@@ -186,7 +201,8 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
         "Never include markdown formatting, code fences, or conversational text. "
         f"{IMMUTABLE_CONTENT_CONSTRAINT} "
         f"{SKILL_GROUNDING_CONSTRAINT} "
-        f"{METRIC_FABRICATION_CONSTRAINT}"
+        f"{METRIC_FABRICATION_CONSTRAINT} "
+        f"{GROUNDING_VALIDATOR_RULE}"
     )
 
     prompt = template_manager.render_template(
@@ -223,7 +239,8 @@ async def run_writer_agent_with_feedback(
         "Never include markdown formatting, code fences, or conversational text. "
         f"{IMMUTABLE_CONTENT_CONSTRAINT} "
         f"{SKILL_GROUNDING_CONSTRAINT} "
-        f"{METRIC_FABRICATION_CONSTRAINT}"
+        f"{METRIC_FABRICATION_CONSTRAINT} "
+        f"{GROUNDING_VALIDATOR_RULE}"
     )
 
     feedback_block = ""
