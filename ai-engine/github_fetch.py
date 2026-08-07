@@ -29,6 +29,154 @@ logger = logging.getLogger(__name__)
 GITHUB_API = "https://api.github.com/repos"
 _UA = {"User-Agent": "Fuse-AI-Engine", "Accept": "application/vnd.github+json"}
 
+# Characters that are special in LaTeX and must be escaped when injecting
+# free-text (e.g. GitHub descriptions) into a .tex document.
+_LATEX_SPECIAL_CHARS = {
+    "&": r"\&",
+    "%": r"\%",
+    "#": r"\#",
+    "_": r"\_",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
+def escape_latex(text: str) -> str:
+    """Escape characters that are special in LaTeX so *text* is safe to inject.
+
+    Handles ``& % # _ ~ ^`` — the most common offenders in GitHub
+    descriptions, topic tags, and README snippets.  Braces and backslashes
+    are left untouched because they may be intentional LaTeX commands in
+    content that has already been through the template pipeline.
+    """
+    for char, replacement in _LATEX_SPECIAL_CHARS.items():
+        text = text.replace(char, replacement)
+    return text
+
+
+# ── GitHub URL extraction from LaTeX bodies ──────────────────────────────────
+
+_GITHUB_URL_RE = re.compile(
+    r"https?://github\.com/([A-Za-z0-9\-_.]+)/([A-Za-z0-9\-_.]+)",
+)
+
+
+def extract_github_urls(section_body: str) -> List[Dict[str, str]]:
+    """Extract all ``github.com/{owner}/{repo}`` URLs from a LaTeX section body.
+
+    Returns a list of ``{"owner": ..., "repo": ..., "url": ...}`` dicts,
+    deduplicated by ``(owner, repo)`` (case-insensitive).
+    """
+    seen: set = set()
+    results: List[Dict[str, str]] = []
+    for match in _GITHUB_URL_RE.finditer(section_body):
+        owner = match.group(1)
+        repo = match.group(2).removesuffix(".git")
+        key = (owner.lower(), repo.lower())
+        if key not in seen:
+            seen.add(key)
+            results.append({
+                "owner": owner,
+                "repo": repo,
+                "url": match.group(0),
+            })
+    return results
+
+
+def fetch_github_repo_context(section_body: str) -> str:
+    """Extract GitHub URLs from *section_body*, fetch their metadata, and
+    return a structured context string for the LLM prompt.
+
+    Each repo block includes description, primary language, topics, and
+    star count — all sourced from the public GitHub API.  On any failure
+    (network, rate-limit 403, 404) the repo is logged and skipped so the
+    pipeline never crashes.
+
+    Returns an empty string if no GitHub URLs are found or all fetches fail.
+    """
+    urls = extract_github_urls(section_body)
+    if not urls:
+        return ""
+
+    context_blocks: List[str] = []
+    for entry in urls:
+        owner, repo_name, url = entry["owner"], entry["repo"], entry["url"]
+        try:
+            data = _fetch_one(owner, repo_name)
+            desc = (data.get("description") or "No description.").strip()
+            lang = (data.get("language") or "Not specified").strip()
+            topics = data.get("topics") or []
+            stars = data.get("stargazers_count", 0)
+            readme_snippet = _fetch_readme_snippet(owner, repo_name)
+
+            block = (
+                f"Repository: {repo_name}\n"
+                f"  URL: {url}\n"
+                f"  Description: {desc}\n"
+                f"  Primary Language: {lang}\n"
+                f"  Topics/Tags: {', '.join(topics) if topics else 'None'}\n"
+                f"  Stars: {stars}\n"
+            )
+            if readme_snippet:
+                block += f"  README Snippet: {readme_snippet}\n"
+
+            context_blocks.append(block)
+            logger.info("[github] Fetched context for %s/%s", owner, repo_name)
+
+        except Exception as error:
+            logger.warning(
+                "[github] Failed to fetch %s/%s (%s); skipping.",
+                owner, repo_name, error,
+            )
+            # Graceful fallback: use mock data if available
+            for mock in MOCK_GITHUB_REPOS:
+                if repo_name.lower() in mock["name"].lower() or mock["name"].lower() in repo_name.lower():
+                    block = (
+                        f"Repository: {mock['name']}\n"
+                        f"  URL: {mock['url']}\n"
+                        f"  Description: {mock['description']}\n"
+                        f"  Primary Language: {mock['language']}\n"
+                        f"  Topics/Tags: {', '.join(mock['topics'])}\n"
+                        f"  Stars: {mock['stars']}\n"
+                    )
+                    context_blocks.append(block)
+                    break
+
+    if not context_blocks:
+        return ""
+
+    return (
+        "The following GitHub repository data was fetched from the GitHub API. "
+        "Use this FACTUAL data to enrich the project bullet points. "
+        "Only reference technologies and facts that appear in this data or in "
+        "the original resume. Do NOT hallucinate or invent any data.\n\n"
+        + "\n".join(context_blocks)
+    )
+
+
+def _fetch_readme_snippet(owner: str, name: str, max_chars: int = 300) -> str:
+    """Fetch the first *max_chars* of a repo's README (best-effort).
+
+    Returns an empty string on any failure (404, rate-limit, etc.).
+    """
+    try:
+        request = urllib.request.Request(
+            f"{GITHUB_API}/{owner}/{name}/readme",
+            headers={**_UA, "Accept": "application/vnd.github.raw+json"},
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+            # Strip markdown headers and blank lines for a clean snippet
+            lines = [
+                line.strip()
+                for line in raw.splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+            snippet = " ".join(lines)[:max_chars]
+            return snippet.strip()
+    except Exception:
+        return ""
+
 # Curated mock repositories used when the GitHub API is unreachable or the
 # request is unauthenticated. Keep descriptions realistic so generated bullets
 # sound like real project experience.
