@@ -435,3 +435,105 @@ def append_to_section(
             new_body = body.rstrip() + insertion
             return tex_string[: span.body_start] + new_body + tex_string[span.body_end :]
     return tex_string
+
+
+# ── Surgical item-list replacement ────────────────────────────────────────────
+# The LLM rewrites bullet points, but the original LaTeX also contains
+# \resumeSubheading and \resumeProjectHeading lines that must NOT be touched.
+# These helpers isolate the *item list blocks* (the region from
+# \resumeItemListStart to \resumeItemListEnd inclusive) so only the bullets
+# inside them are replaced, leaving headings byte-for-byte intact.
+
+_ITEM_LIST_START_RE = re.compile(r"\\resumeItemListStart\b")
+_ITEM_LIST_END_RE = re.compile(r"\\resumeItemListEnd\b")
+
+
+@dataclass
+class ItemListSpan:
+    """Character offsets of one \\resumeItemListStart … \\resumeItemListEnd block."""
+    start: int        # index of the `\` in \resumeItemListStart
+    end: int          # index just *after* \resumeItemListEnd
+    content: str      # the full text including the Start/End delimiters
+
+
+def find_item_list_spans(section_body: str) -> List[ItemListSpan]:
+    r"""Locate every \resumeItemListStart … \resumeItemListEnd block in *section_body*.
+
+    Returns a list of ItemListSpan sorted by position. Blocks that are
+    missing a closing \resumeItemListEnd are silently skipped (defensive).
+    """
+    spans: List[ItemListSpan] = []
+    for m_start in _ITEM_LIST_START_RE.finditer(section_body):
+        m_end = _ITEM_LIST_END_RE.search(section_body, m_start.end())
+        if m_end is None:
+            continue
+        end_pos = m_end.end()
+        spans.append(ItemListSpan(
+            start=m_start.start(),
+            end=end_pos,
+            content=section_body[m_start.start():end_pos],
+        ))
+    return spans
+
+
+def extract_item_list_bodies(section_body: str) -> List[str]:
+    r"""Return the raw text inside each \resumeItemListStart … \resumeItemListEnd.
+
+    The delimiters themselves are included in the returned strings so the
+    LLM sees (and must reproduce) the exact environment boundaries.
+    """
+    return [span.content for span in find_item_list_spans(section_body)]
+
+
+def replace_item_list_bodies(
+    section_body: str,
+    new_bodies: List[str],
+) -> str:
+    r"""Replace each \resumeItemListStart…\resumeItemListEnd block in *section_body*
+    with the corresponding entry in *new_bodies*.
+
+    If *new_bodies* has fewer entries than item-list blocks in the section,
+    trailing blocks are left unchanged (defensive). Extra entries in
+    *new_bodies* are ignored.
+
+    This is the core of "surgical injection": headings (\resumeSubheading,
+    \resumeProjectHeading) and any text outside the item-list environments
+    are preserved byte-for-byte.
+    """
+    spans = find_item_list_spans(section_body)
+    # Apply replacements back-to-front so earlier offsets stay valid.
+    for i in range(min(len(spans), len(new_bodies)) - 1, -1, -1):
+        span = spans[i]
+        replacement = new_bodies[i].strip()
+        # Ensure the replacement still has the delimiters.
+        if not replacement.startswith("\\resumeItemListStart"):
+            replacement = "\\resumeItemListStart\n" + replacement
+        if not replacement.endswith("\\resumeItemListEnd"):
+            replacement = replacement + "\n\\resumeItemListEnd"
+        section_body = (
+            section_body[: span.start] + replacement + section_body[span.end :]
+        )
+    return section_body
+
+
+# ── Pre-compilation text fixups ───────────────────────────────────────────────
+# Hardcoded corrections applied to the merged LaTeX string just before it is
+# handed to pdflatex. These address known factual updates the user has
+# requested (e.g. updated hackathon results from a new certificate).
+
+_PRE_COMPILE_REPLACEMENTS: List[Tuple[str, str]] = [
+    ("2nd Runner-Up", "1st Runner-Up"),
+]
+
+
+def pre_compile_fixups(tex_string: str) -> str:
+    """Apply all hardcoded text corrections to *tex_string*.
+
+    Called immediately before ``compile_tex_to_pdf`` so the compiled PDF
+    reflects the user's updated records without requiring a full LLM
+    round-trip.
+    """
+    for old, new in _PRE_COMPILE_REPLACEMENTS:
+        tex_string = tex_string.replace(old, new)
+    return tex_string
+

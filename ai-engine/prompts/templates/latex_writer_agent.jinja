@@ -16,11 +16,13 @@ This resume is built with CUSTOM LaTeX macros. You MUST reuse the EXACT custom m
 
 RULES:
 1. Rewrite ONLY the text inside the EXPERIENCE and PROJECTS section bodies. Do not output any other section, the preamble, or the \section commands themselves.
-2. Wrap every bullet point in \resumeItem{...}. Keep job/project headings in the exact \resumeSubheading{...} / \resumeProjectHeading{...} form used in the original.
-3. You must NEVER invent, infer, or fabricate numerical metrics, percentages, or timeline durations. Use only numbers present in the original section bodies. If a bullet lacks a metric, improve the action verb and impact phrasing, but leave the metric blank. Do not guess or estimate numbers.
-4. Do not stuff keywords. Do not list skills that are not explicitly proven in the original content or in the provided GitHub project context. You are optimizing phrasing, not fabricating qualifications.
-5. You are strictly forbidden from summarizing, truncating, or omitting contact information, portfolio links, education details, and awards.
-6. Never include markdown code fences, comments, or any text outside the JSON object.
+2. CRITICAL FORMATTING RULE: You are writing for a strict LaTeX document. You MUST wrap every single bullet point you generate inside the \resumeItem{} command. Example: \resumeItem{Architected a scalable FastAPI backend serving 10K+ daily requests with sub-200ms P95 latency.} Do not use standard markdown bullets (- or *). Do not output plain text lines without the \resumeItem{} wrapper. Failure to use \resumeItem{} will break the LaTeX compiler and cause a fatal compilation error.
+3. Keep job/project headings in the exact \resumeSubheading{...}{...}{...}{...} / \resumeProjectHeading{...}{...} form used in the original. Never alter, remove, or reformat heading macros.
+4. Every group of \resumeItem{} bullets MUST be enclosed between \resumeItemListStart and \resumeItemListEnd. Never omit these environment boundaries.
+5. You must NEVER invent, infer, or fabricate numerical metrics, percentages, or timeline durations. Use only numbers present in the original section bodies. If a bullet lacks a metric, improve the action verb and impact phrasing, but leave the metric blank. Do not guess or estimate numbers.
+6. Do not stuff keywords. Do not list skills that are not explicitly proven in the original content or in the provided GitHub project context. You are optimizing phrasing, not fabricating qualifications.
+7. You are strictly forbidden from summarizing, truncating, or omitting contact information, portfolio links, education details, and awards.
+8. Never include markdown code fences, comments, or any text outside the JSON object.
 
 OUTPUT MANDATE:
 Return ONLY a valid JSON object with this exact structure (escape backslashes as \\):
@@ -30,3 +32,4 @@ Return ONLY a valid JSON object with this exact structure (escape backslashes as
     "PROJECTS": "<complete new LaTeX body for the PROJECTS section, using the original macros>"
   }
 }
+

@@ -24,6 +24,8 @@ import subprocess
 import uuid
 from pathlib import Path
 
+from latex_parser import pre_compile_fixups
+
 
 class LatexCompileError(Exception):
     """Raised when pdflatex runs but rejects the supplied LaTeX document.
@@ -107,6 +109,7 @@ def compile_tex_to_pdf(tex_string: str, output_name: str = "resume") -> bytes:
     pdf_path = workdir / f"{output_name}.pdf"
 
     try:
+        tex_string = pre_compile_fixups(tex_string)
         _assert_safe(tex_string)
         tex_path.write_text(tex_string, encoding="utf-8")
 

@@ -164,6 +164,13 @@ async def rewrite_latex_sections(
     system_message = (
         "You are an Elite Career Consultant and Senior Technical Resume Writer. "
         "You surgically rewrite LaTeX resume section bodies and return ONLY valid JSON. "
+        "CRITICAL FORMATTING RULE: You are writing for a strict LaTeX document. "
+        "You MUST wrap every single bullet point you generate inside the "
+        "\\resumeItem{} command. Example: \\resumeItem{Architected a scalable "
+        "FastAPI backend...}. Do not use standard markdown bullets (- or *). "
+        "Failure to use \\resumeItem{} will break the compiler. "
+        "Every group of \\resumeItem{} bullets MUST be enclosed between "
+        "\\resumeItemListStart and \\resumeItemListEnd. "
         f"{IMMUTABLE_CONTENT_CONSTRAINT} {METRIC_FABRICATION_CONSTRAINT} "
         f"{SKILL_GROUNDING_CONSTRAINT}"
     )
