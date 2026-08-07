@@ -9,6 +9,7 @@ import logging
 from typing import Dict, Sequence
 
 import latex_parser
+import github_fetch
 from prompt import (
     IMMUTABLE_CONTENT_CONSTRAINT,
     METRIC_FABRICATION_CONSTRAINT,
@@ -146,6 +147,35 @@ async def rewrite_latex_sections(
     if not wanted:
         return {}, link_map
 
+    # ── Auto-detect GitHub URLs in the Projects section and fetch context ──
+    projects_body = ""
+    for title, body in wanted.items():
+        if title.strip().lower() == "projects":
+            projects_body = body
+            break
+
+    fetched_context = ""
+    if projects_body:
+        try:
+            fetched_context = github_fetch.fetch_github_repo_context(projects_body)
+            if fetched_context:
+                logger.info("Fetched live GitHub context for %d repo(s).",
+                            len(github_fetch.extract_github_urls(projects_body)))
+        except Exception as e:
+            logger.warning("GitHub context fetch failed (%s); proceeding without.", e)
+
+    # Merge explicit github_projects with auto-fetched context
+    github_context_str = ""
+    if github_projects:
+        github_context_str = json.dumps(github_projects, indent=2)
+    if fetched_context:
+        if github_context_str:
+            github_context_str += "\n\n" + fetched_context
+        else:
+            github_context_str = fetched_context
+    if not github_context_str:
+        github_context_str = "None"
+
     section_bodies = "\n\n".join(
         f"<SECTION: {title}>\n{body}\n</SECTION>"
         for title, body in wanted.items()
@@ -154,9 +184,7 @@ async def rewrite_latex_sections(
         "latex_writer_agent",
         section_bodies=section_bodies,
         jd_text=jd_text,
-        github_projects=(
-            json.dumps(github_projects, indent=2) if github_projects else "None"
-        ),
+        github_projects=github_context_str,
     )
     if prompt is None:
         raise ValueError("Failed to render latex_writer_agent template.")
