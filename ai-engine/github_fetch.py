@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import urllib.request
 from typing import Dict, List, Optional
@@ -27,7 +28,11 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 GITHUB_API = "https://api.github.com/repos"
+GITHUB_USER_API = "https://api.github.com/users"
 _UA = {"User-Agent": "Fuse-AI-Engine", "Accept": "application/vnd.github+json"}
+token = os.getenv("GITHUB_TOKEN")
+if token:
+    _UA["Authorization"] = f"Bearer {token}"
 
 # Characters that are special in LaTeX and must be escaped when injecting
 # free-text (e.g. GitHub descriptions) into a .tex document.
@@ -175,6 +180,47 @@ def _fetch_readme_snippet(owner: str, name: str, max_chars: int = 300) -> str:
             snippet = " ".join(lines)[:max_chars]
             return snippet.strip()
     except Exception:
+        return ""
+
+def fetch_user_portfolio(username: str) -> str:
+    """Fetch the user's entire public portfolio from GitHub.
+
+    Queries ``https://api.github.com/users/{username}/repos`` to get the first 30
+    repositories sorted by updated date. Extracts repo name, description,
+    language, and topics for each. Excludes repos that match the username (i.e. profile READMEs).
+
+    Returns a JSON string mapping repo names to their metadata.
+    On failure (403, 404, network), returns an empty string or gracefully falls back.
+    """
+    if not username:
+        return ""
+    try:
+        request = urllib.request.Request(
+            f"{GITHUB_USER_API}/{username}/repos?sort=updated&per_page=30",
+            headers=_UA,
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        
+        portfolio = {}
+        for repo in data:
+            repo_name = repo.get("name", "")
+            # Skip profile README repositories
+            if repo_name.lower() == username.lower():
+                continue
+            
+            portfolio[repo_name] = {
+                "description": (repo.get("description") or "").strip(),
+                "language": (repo.get("language") or "").strip(),
+                "topics": repo.get("topics") or [],
+                "url": repo.get("html_url") or "",
+            }
+        return json.dumps(portfolio, indent=2)
+    except Exception as error:
+        logger.warning(
+            "[github] Failed to fetch portfolio for user %s (%s); falling back.",
+            username, error
+        )
         return ""
 
 # Curated mock repositories used when the GitHub API is unreachable or the

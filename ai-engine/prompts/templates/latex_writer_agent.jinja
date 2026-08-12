@@ -11,8 +11,7 @@ This resume is built with CUSTOM LaTeX macros. You MUST reuse the EXACT custom m
 </JOB_DESCRIPTION>
 
 <GITHUB_PROJECT_CONTEXT>
-The following data was fetched from the GitHub API for repositories found in the resume.
-Use this FACTUAL data to enrich the project bullet points. Ensure the tech stack, description, and topics from the GitHub data are woven into the bullet points ONLY if they align with the Job Description. Do NOT hallucinate or invent any data beyond what is provided here and in the original resume.
+PORTFOLIO SELECTION RULE: You have been provided with the candidate's complete GitHub portfolio. You must analyze these projects against the Job Description. Select EXACTLY TWO (2) projects that best demonstrate the skills required for this job. Do not include any other projects. For the 2 selected projects, generate the LaTeX code using \resumeProjectHeading{\textbf{Project Name} $|$ \href{URL}{\myuline{URL}}}{} and wrap every bullet point in \resumeItem{}. You MUST escape special LaTeX characters (e.g., \&, \%, \_) in the project descriptions.
 
 {{ github_projects }}
 </GITHUB_PROJECT_CONTEXT>
@@ -22,12 +21,10 @@ RULES:
 2. CRITICAL FORMATTING RULE: You are writing for a strict LaTeX document. You MUST wrap every single bullet point you generate inside the \resumeItem{} command. Example: \resumeItem{Architected a scalable FastAPI backend serving 10K+ daily requests with sub-200ms P95 latency.} Do not use standard markdown bullets (- or *). Do not output plain text lines without the \resumeItem{} wrapper. Failure to use \resumeItem{} will break the LaTeX compiler and cause a fatal compilation error.
 3. Keep job/project headings in the exact \resumeSubheading{...}{...}{...}{...} / \resumeProjectHeading{...}{...} form used in the original. Never alter, remove, or reformat heading macros.
 4. Every group of \resumeItem{} bullets MUST be enclosed between \resumeItemListStart and \resumeItemListEnd. Never omit these environment boundaries.
-5. If the GitHub context provides data for a project already in the resume, use it to enhance that project's existing bullet points with JD-relevant technologies and descriptions. Do NOT create duplicate entries.
-6. If you add a NEW project from the GitHub context, use the exact LaTeX structure: \resumeProjectHeading{\textbf{Project Name} $|$ \href{URL}{\myuline{URL}}}{} followed by \resumeItemListStart, \resumeItem{...} entries, and \resumeItemListEnd.
-7. You must NEVER invent, infer, or fabricate numerical metrics, percentages, or timeline durations. Use only numbers present in the original section bodies. If a bullet lacks a metric, improve the action verb and impact phrasing, but leave the metric blank. Do not guess or estimate numbers.
-8. Do not stuff keywords. Do not list skills that are not explicitly proven in the original content or in the provided GitHub project context. You are optimizing phrasing, not fabricating qualifications.
-9. You are strictly forbidden from summarizing, truncating, or omitting contact information, portfolio links, education details, and awards.
-10. Never include markdown code fences, comments, or any text outside the JSON object.
+5. You must NEVER invent, infer, or fabricate numerical metrics, percentages, or timeline durations. Use only numbers present in the original section bodies. If a bullet lacks a metric, improve the action verb and impact phrasing, but leave the metric blank. Do not guess or estimate numbers.
+6. Do not stuff keywords. Do not list skills that are not explicitly proven in the original content or in the provided GitHub project context. You are optimizing phrasing, not fabricating qualifications.
+7. You are strictly forbidden from summarizing, truncating, or omitting contact information, portfolio links, education details, and awards.
+8. Never include markdown code fences, comments, or any text outside the JSON object.
 
 OUTPUT MANDATE:
 Return ONLY a valid JSON object with this exact structure (escape backslashes as \\):

@@ -147,23 +147,24 @@ async def rewrite_latex_sections(
     if not wanted:
         return {}, link_map
 
-    # ── Auto-detect GitHub URLs in the Projects section and fetch context ──
-    projects_body = ""
-    for title, body in wanted.items():
-        if title.strip().lower() == "projects":
-            projects_body = body
-            break
-
+    # ── Fetch User's Entire GitHub Portfolio ──
+    # Parse the username from the resume (e.g., github.com/username)
+    import re
+    username_match = re.search(r"github\.com/([^\s}\\]+)", tex_string)
     fetched_context = ""
-    if projects_body:
+    if username_match:
+        username = username_match.group(1).removesuffix("/")
         try:
-            fetched_context = github_fetch.fetch_github_repo_context(projects_body)
-            if fetched_context:
-                logger.info("Fetched live GitHub context for %d repo(s).",
-                            len(github_fetch.extract_github_urls(projects_body)))
+            portfolio_json = github_fetch.fetch_user_portfolio(username)
+            if portfolio_json:
+                fetched_context = (
+                    f"The candidate's complete GitHub portfolio (username: {username}):\n"
+                    f"{portfolio_json}\n"
+                )
+                logger.info("Fetched live GitHub portfolio for user %s.", username)
         except Exception as e:
-            logger.warning("GitHub context fetch failed (%s); proceeding without.", e)
-
+            logger.warning("GitHub portfolio fetch failed (%s); proceeding without.", e)
+            
     # Merge explicit github_projects with auto-fetched context
     github_context_str = ""
     if github_projects:
