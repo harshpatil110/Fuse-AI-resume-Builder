@@ -24,7 +24,7 @@ router.post('/compile', async (req, res) => {
     // Forward GitHub repo selections + JD so the AI engine can fetch repo data,
     // generate bullets, and inject \\resumeProjectHeading blocks into PROJECTS.
     const aiResponse = await axios.post(
-      'http://localhost:8000/api/compile-tex',
+      `${process.env.AI_ENGINE_URL || 'http://localhost:8000'}/api/compile-tex`,
       {
         tex,
         sections,

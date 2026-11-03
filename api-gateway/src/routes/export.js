@@ -15,7 +15,7 @@ router.post('/pdf', async (req, res) => {
     if (resumeData.raw_tex || resumeData.format === 'latex' || resumeData.tex) {
       const tex = resumeData.raw_tex || resumeData.tex;
       const aiResponse = await axios.post(
-        'http://localhost:8000/api/compile-tex',
+        `${process.env.AI_ENGINE_URL || 'http://localhost:8000'}/api/compile-tex`,
         { tex },
         {
           responseType: 'arraybuffer',

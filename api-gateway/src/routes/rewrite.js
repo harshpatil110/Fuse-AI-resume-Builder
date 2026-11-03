@@ -33,7 +33,7 @@ router.post('/rewrite', async (req, res) => {
     }
 
     const aiResponse = await axios.post(
-      'http://localhost:8000/api/rewrite-resume',
+      `${process.env.AI_ENGINE_URL || 'http://localhost:8000'}/api/rewrite-resume`,
       {
         parsed_resume: parsedResume,
         jd_text: jdText,

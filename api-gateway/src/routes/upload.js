@@ -41,7 +41,7 @@ router.post('/upload', (req, res) => {
       }
 
       // Step 1: Parse the resume PDF via Python Engine
-      const processResponse = await axios.post('http://localhost:8000/process-resume', formData, {
+      const processResponse = await axios.post(`${process.env.AI_ENGINE_URL || 'http://localhost:8000'}/process-resume`, formData, {
         headers: formData.getHeaders(),
         maxBodyLength: Infinity,
         maxContentLength: Infinity,
@@ -50,7 +50,7 @@ router.post('/upload', (req, res) => {
       const extractedData = processResponse.data.extracted_data;
 
       // Step 2: Run the Critic Agent
-      const criticResponse = await axios.post('http://localhost:8000/api/criticize', {
+      const criticResponse = await axios.post(`${process.env.AI_ENGINE_URL || 'http://localhost:8000'}/api/criticize`, {
         resume_data: extractedData,
         jd_text: jdText || 'Job description provided via file',
       }, {
