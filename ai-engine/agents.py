@@ -153,7 +153,7 @@ async def rewrite_latex_sections(
     username_match = re.search(r"github\.com/([^\s}\\]+)", tex_string)
     fetched_context = ""
     if username_match:
-        username = username_match.group(1).removesuffix("/")
+        username = username_match.group(1).removesuffix("/").removesuffix("/")
         try:
             portfolio_json = github_fetch.fetch_user_portfolio(username)
             if portfolio_json:

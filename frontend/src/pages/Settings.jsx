@@ -1,247 +1,125 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Check, Square, CheckSquare, Star, ExternalLink } from 'lucide-react';
-
-const GithubIcon = ({ size = 24, strokeWidth = 2, className = "" }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={strokeWidth}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-    <path d="M9 18c-4.51 2-5-2-7-2" />
-  </svg>
-);
+import { GitBranch, Check, ExternalLink, Settings as SettingsIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const MOCK_REPOS = [
-  {
-    id: 1,
-    name: 'fuse-career-app',
-    description: 'A B2C career optimization platform built with React, Node.js, and FastAPI.',
-    language: 'JavaScript',
-    stars: 24,
-    url: 'https://github.com/user/fuse-career-app',
-  },
-  {
-    id: 2,
-    name: 'distributed-cache',
-    description: 'High-performance distributed caching layer using Redis and Go, handling 50k req/s.',
-    language: 'Go',
-    stars: 142,
-    url: 'https://github.com/user/distributed-cache',
-  },
-  {
-    id: 3,
-    name: 'ml-pipeline-toolkit',
-    description: 'End-to-end ML pipeline for data preprocessing, model training, and deployment on AWS.',
-    language: 'Python',
-    stars: 67,
-    url: 'https://github.com/user/ml-pipeline-toolkit',
-  },
-  {
-    id: 4,
-    name: 'react-component-library',
-    description: 'A design-system-first UI component library with full accessibility support.',
-    language: 'TypeScript',
-    stars: 31,
-    url: 'https://github.com/user/react-component-library',
-  },
+  { id: 1, name: 'fuse-career-app', lang: 'JavaScript', desc: 'B2C career platform with React & Node', url: '#' },
+  { id: 2, name: 'distributed-cache', lang: 'Go', desc: 'High-performance Redis cache', url: '#' },
+  { id: 3, name: 'ml-pipeline-toolkit', lang: 'Python', desc: 'AWS ML Pipeline', url: '#' },
 ];
-
-const LANGUAGE_COLORS = {
-  JavaScript: 'bg-yellow-400',
-  TypeScript: 'bg-blue-500',
-  Python: 'bg-green-500',
-  Go: 'bg-cyan-500',
-};
 
 export default function Settings() {
   const [isConnected, setIsConnected] = useState(false);
-  const [repositories, setRepositories] = useState(MOCK_REPOS);
   const [selectedRepos, setSelectedRepos] = useState(new Set());
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     if (searchParams.get('github_connected') === 'true') {
       setIsConnected(true);
-      // Clean up the URL
       searchParams.delete('github_connected');
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
   const toggleRepo = (id) => {
-    setSelectedRepos((prev) => {
+    setSelectedRepos(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
-  const handleConnect = () => {
-    window.location.href = 'http://localhost:5000/api/auth/github';
-  };
-
   return (
-    <div>
-      <p className="text-xs font-medium tracking-widest uppercase text-stone-400 mb-4">
-        Configuration
-      </p>
-      <h1 className="text-4xl font-bold tracking-tight text-stone-900 mb-3">
-        Settings
-      </h1>
-      <p className="text-base font-normal leading-relaxed text-stone-500 max-w-[65ch] mb-12">
-        Manage your GitHub integration. Connect your account to let the AI engine analyze your
-        repositories and weave relevant projects into your resume.
-      </p>
+    <div className="max-w-2xl mx-auto">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-10 text-center">
+        <div className="inline-flex items-center gap-1.5 bg-stone-200/50 text-ink-light px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide uppercase mb-4">
+          <SettingsIcon size={14} /> Configuration
+        </div>
+        <h1 className="text-4xl font-semibold tracking-tight text-ink mb-3">Settings</h1>
+        <p className="text-[17px] text-ink-light leading-relaxed max-w-[55ch] mx-auto">
+          Manage integrations and profile defaults for the AI engine.
+        </p>
+      </motion.div>
 
-      {/* GitHub Section */}
-      <div className="bg-white border border-stone-200 p-8 mb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <GithubIcon size={20} strokeWidth={1.5} className="text-stone-700" />
-          <h2 className="text-lg font-semibold tracking-tight text-stone-900">
-            GitHub Integration
-          </h2>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}
+        className="apple-card overflow-hidden"
+      >
+        <div className="p-6 border-b border-stone-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-900">
+            <GitBranch size={20} />
+          </div>
+          <div>
+            <h2 className="text-[17px] font-semibold text-ink">GitHub Integration</h2>
+            <p className="text-[13px] text-ink-light">Sync repositories to enrich your resume</p>
+          </div>
         </div>
 
-        {!isConnected ? (
-          /* ── Disconnected State ── */
-          <div>
-            <p className="text-sm leading-relaxed text-stone-500 max-w-[65ch] mb-6">
-              Connect your GitHub profile to automatically import your repositories. The AI engine
-              will select the most relevant projects and integrate them into your tailored resume.
-            </p>
-            <button
-              onClick={handleConnect}
-              className="bg-stone-900 text-white rounded-sm px-6 py-2.5 text-sm font-medium tracking-wide hover:bg-stone-700 transition-colors duration-300"
-            >
-              Connect GitHub Profile
-            </button>
-
-            {/* Dev toggle for previewing the connected state */}
-            <button
-              onClick={() => setIsConnected(true)}
-              className="ml-4 bg-transparent border border-stone-300 text-stone-500 rounded-sm px-4 py-2.5 text-xs font-medium tracking-wide hover:bg-stone-100 transition-colors duration-300"
-            >
-              Preview Connected State
-            </button>
-          </div>
-        ) : (
-          /* ── Connected State ── */
-          <div>
-            <div className="flex items-center gap-2 mb-6">
-              <Check size={16} strokeWidth={1.5} className="text-green-600" />
-              <p className="text-sm text-stone-600">
-                Connected as <span className="font-semibold text-stone-900">harsh-dev</span>
+        <div className="p-6 bg-stone-50/50">
+          {!isConnected ? (
+            <div className="text-center py-6">
+              <p className="text-[15px] text-ink-light mb-6 max-w-md mx-auto">
+                Connect your account to allow the AI to weave relevant projects into your tailored resume.
               </p>
-            </div>
-
-            {/* Repository Selection */}
-            <div className="mb-6">
-              <p className="text-xs font-medium tracking-widest uppercase text-stone-500 mb-4">
-                Select repositories for AI analysis
-              </p>
-              <p className="text-sm text-stone-400 mb-6">
-                {selectedRepos.size} of {repositories.length} repositories selected
-              </p>
-            </div>
-
-            <div className="grid gap-4">
-              {repositories.map((repo) => {
-                const isSelected = selectedRepos.has(repo.id);
-                return (
-                  <button
-                    key={repo.id}
-                    onClick={() => toggleRepo(repo.id)}
-                    className={`w-full text-left p-5 border transition-colors duration-300 ${
-                      isSelected
-                        ? 'bg-blue-50/40 border-blue-300'
-                        : 'bg-white border-stone-200 hover:bg-stone-50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2.5 mb-1.5">
-                          {isSelected ? (
-                            <CheckSquare
-                              size={16}
-                              strokeWidth={1.5}
-                              className="text-blue-600 flex-shrink-0"
-                            />
-                          ) : (
-                            <Square
-                              size={16}
-                              strokeWidth={1.5}
-                              className="text-stone-400 flex-shrink-0"
-                            />
-                          )}
-                          <span
-                            className={`text-sm font-semibold tracking-tight ${
-                              isSelected ? 'text-blue-900' : 'text-stone-900'
-                            }`}
-                          >
-                            {repo.name}
-                          </span>
-                        </div>
-                        <p className="text-sm text-stone-500 leading-relaxed pl-[26px] mb-3">
-                          {repo.description}
-                        </p>
-                        <div className="flex items-center gap-4 pl-[26px]">
-                          <span className="flex items-center gap-1.5 text-xs tracking-widest uppercase text-stone-500">
-                            <span
-                              className={`inline-block w-2 h-2 rounded-sm ${
-                                LANGUAGE_COLORS[repo.language] || 'bg-stone-400'
-                              }`}
-                            />
-                            {repo.language}
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-stone-400">
-                            <Star size={12} strokeWidth={1.5} />
-                            {repo.stars}
-                          </span>
-                        </div>
-                      </div>
-                      <a
-                        href={repo.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-stone-400 hover:text-stone-700 transition-colors duration-300 flex-shrink-0 ml-4"
-                      >
-                        <ExternalLink size={14} strokeWidth={1.5} />
-                      </a>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Disconnect */}
-            <div className="mt-8 pt-6 border-t border-stone-200">
-              <button
-                onClick={() => {
-                  setIsConnected(false);
-                  setSelectedRepos(new Set());
-                }}
-                className="text-xs font-medium tracking-wide text-stone-400 hover:text-stone-700 transition-colors duration-300"
+              <button 
+                onClick={() => setIsConnected(true)} 
+                className="apple-btn bg-stone-900 hover:bg-stone-800"
               >
-                Disconnect GitHub
+                Connect GitHub Profile
               </button>
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-xl border border-stone-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                  <span className="text-[15px] text-ink">Connected as <strong>harsh-dev</strong></span>
+                </div>
+                <button onClick={() => setIsConnected(false)} className="text-[13px] text-stone-400 hover:text-red-500 font-medium transition-colors">
+                  Disconnect
+                </button>
+              </div>
+
+              <p className="text-[13px] font-semibold tracking-wide uppercase text-ink-light mb-3 ml-1">
+                Select Repositories
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                {MOCK_REPOS.map(repo => {
+                  const isSelected = selectedRepos.has(repo.id);
+                  return (
+                    <motion.div
+                      key={repo.id}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      onClick={() => toggleRepo(repo.id)}
+                      className={`apple-card p-4 flex items-center justify-between cursor-pointer transition-colors ${
+                        isSelected ? 'border-accent bg-blue-50/30' : 'hover:border-stone-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors ${
+                          isSelected ? 'bg-accent border-accent text-white' : 'border-stone-300 text-transparent'
+                        }`}>
+                          <Check size={14} strokeWidth={3} />
+                        </div>
+                        <div>
+                          <p className={`text-[15px] font-semibold ${isSelected ? 'text-accent' : 'text-ink'}`}>{repo.name}</p>
+                          <p className="text-[13px] text-ink-light">{repo.desc}</p>
+                        </div>
+                      </div>
+                      <span className="text-[12px] font-medium px-2.5 py-1 bg-stone-100 text-stone-500 rounded-md">
+                        {repo.lang}
+                      </span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }

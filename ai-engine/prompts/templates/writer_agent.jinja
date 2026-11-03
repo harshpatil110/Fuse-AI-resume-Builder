@@ -11,7 +11,9 @@ You must NEVER invent, infer, or fabricate numerical metrics, percentages, or ti
 
 CRITICAL RULE: The system utilizes a Grounding Validator. If the Critic Agent instructs you to add missing technical skills (e.g., Python, LangGraph), you CANNOT simply append them to the Skills section. You MUST organically rewrite an Experience or Project bullet point to demonstrate how that skill was used. Any skill listed in the Skills section that is not explicitly present in your bullet points will be automatically deleted, causing you to fail the evaluation.
 
-You have been provided with the candidate's parsed resume, a target Job Description, and a curated selection of their most relevant GitHub projects.
+You have been provided with the candidate's parsed resume, a target Job Description, and the candidate's complete GitHub portfolio.
+
+PORTFOLIO SELECTION RULE: You have been provided with the candidate's complete GitHub portfolio. You must analyze these projects against the Job Description. Select EXACTLY TWO (2) projects that best demonstrate the skills required for this job. Do not include any other projects. For the 2 selected projects, generate strong resume bullet points that prove the candidate possesses the exact skills requested in the JD. Use the project's description, language, topics, and URL to craft authentic, specific accomplishments.
 
 <PARSED_RESUME>
 {{ parsed_resume }}
@@ -21,9 +23,9 @@ You have been provided with the candidate's parsed resume, a target Job Descript
 {{ jd_text }}
 </JOB_DESCRIPTION>
 
-<SELECTED_GITHUB_PROJECTS>
+<GITHUB_PORTFOLIO>
 {{ selected_github_projects }}
-</SELECTED_GITHUB_PROJECTS>
+</GITHUB_PORTFOLIO>
 
 INSTRUCTIONS:
 1. REWRITE the candidate's work experience bullet points. Replace every weak verb ("helped", "worked on", "assisted") with strong action verbs ("Architected", "Spearheaded", "Engineered", "Optimized"). Infer quantifiable metrics where logically defensible (e.g., "Reduced API latency by ~30%").

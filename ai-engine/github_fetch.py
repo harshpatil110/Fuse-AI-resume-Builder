@@ -185,35 +185,59 @@ def _fetch_readme_snippet(owner: str, name: str, max_chars: int = 300) -> str:
 def fetch_user_portfolio(username: str) -> str:
     """Fetch the user's entire public portfolio from GitHub.
 
-    Queries ``https://api.github.com/users/{username}/repos`` to get the first 30
-    repositories sorted by updated date. Extracts repo name, description,
-    language, and topics for each. Excludes repos that match the username (i.e. profile READMEs).
+    Queries ``https://api.github.com/users/{username}/repos`` to get all public
+    repositories sorted by updated date (handles pagination up to 100 repos).
+    Extracts repo name, description, language, and topics for each. Excludes
+    repos that match the username (i.e. profile READMEs).
 
-    Returns a JSON string mapping repo names to their metadata.
-    On failure (403, 404, network), returns an empty string or gracefully falls back.
+    Returns a JSON string mapping repo names to their metadata with LaTeX-safe
+    escaped strings. On failure (403, 404, network), returns an empty string.
     """
     if not username:
         return ""
     try:
-        request = urllib.request.Request(
-            f"{GITHUB_USER_API}/{username}/repos?sort=updated&per_page=30",
-            headers=_UA,
-        )
-        with urllib.request.urlopen(request, timeout=10) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        
+        all_repos = []
+        page = 1
+        per_page = 100
+        max_repos = 100  # Cap to avoid excessive API calls
+
+        while len(all_repos) < max_repos:
+            request = urllib.request.Request(
+                f"{GITHUB_USER_API}/{username}/repos?sort=updated&per_page={per_page}&page={page}",
+                headers=_UA,
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                data = json.loads(response.read().decode("utf-8"))
+
+            if not data:
+                break
+
+            all_repos.extend(data)
+            if len(data) < per_page:
+                break
+            page += 1
+
+        # Limit to max_repos
+        all_repos = all_repos[:max_repos]
+
         portfolio = {}
-        for repo in data:
+        for repo in all_repos:
             repo_name = repo.get("name", "")
             # Skip profile README repositories
             if repo_name.lower() == username.lower():
                 continue
-            
+
+            # Escape LaTeX special characters in all text fields
+            desc = escape_latex((repo.get("description") or "").strip())
+            lang = escape_latex((repo.get("language") or "").strip())
+            topics = [escape_latex(t) for t in (repo.get("topics") or [])]
+            url = repo.get("html_url") or ""
+
             portfolio[repo_name] = {
-                "description": (repo.get("description") or "").strip(),
-                "language": (repo.get("language") or "").strip(),
-                "topics": repo.get("topics") or [],
-                "url": repo.get("html_url") or "",
+                "description": desc,
+                "language": lang,
+                "topics": topics,
+                "url": url,
             }
         return json.dumps(portfolio, indent=2)
     except Exception as error:

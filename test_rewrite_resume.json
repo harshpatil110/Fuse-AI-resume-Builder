@@ -1,0 +1,45 @@
+{
+  "parsed_resume": {
+    "basics": {
+      "name": "Harsh Patil",
+      "email": "harshpatil110@gmail.com",
+      "phone": "+91 98765 43210",
+      "location": "Mumbai, India",
+      "summary": "Software Engineer with experience in microservices and full-stack development."
+    },
+    "work": [
+      {
+        "company": "Acme Corp",
+        "position": "Software Engineer",
+        "startDate": "2023-01",
+        "endDate": "Present",
+        "bullets": [
+          "Built and shipped a microservices migration",
+          "Reduced build times by 20%"
+        ]
+      }
+    ],
+    "projects": [
+      {
+        "name": "O.N.E.",
+        "description": "RAG-powered note-taking with FAISS and OpenAI embeddings",
+        "url": "https://github.com/harshpatil110/one",
+        "technologies": ["Python", "FastAPI", "FAISS"],
+        "bullets": [
+          "RAG-powered note-taking with FAISS and OpenAI embeddings"
+        ]
+      }
+    ],
+    "education": [
+      {
+        "institution": "VESIT, Mumbai",
+        "degree": "B.E.",
+        "field": "Computer Engineering",
+        "year": "2023"
+      }
+    ],
+    "skills": ["Python", "FastAPI", "Microservices", "Docker"]
+  },
+  "jd_text": "Looking for a React and PostgreSQL developer with strong TypeScript skills.",
+  "selected_github_projects": []
+}
