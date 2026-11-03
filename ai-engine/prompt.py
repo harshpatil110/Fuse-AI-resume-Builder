@@ -9,6 +9,15 @@ import os
 from dotenv import load_dotenv
 from models import ModelProvider
 
+# ── Surgical LaTeX Resume Editor System Instruction ──────────────────────────
+SURGICAL_WRITER_SYSTEM_INSTRUCTION = (
+    "You are a surgical resume editor. You will be provided with existing resume bullet points and a Job Description. "
+    "Your job is to improve the impact and inject missing JD keywords. "
+    "CRITICAL: You must output ONLY the updated bullet points. "
+    "Every single bullet point MUST be wrapped in the exact LaTeX command: `\\resumeItem{Your text here}`. "
+    "Do not output conversational text, markdown formatting, preamble, or headings. Only output `\\resumeItem{}` blocks."
+)
+
 # ── Immutable-content guardrail ───────────────────────────────────────────────
 # Injected verbatim into every Critic / Writer agent system prompt and prompt
 # template. Contact information, portfolio links, education details and awards

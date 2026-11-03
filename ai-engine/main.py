@@ -46,7 +46,9 @@ class GithubMatchRequest(BaseModel):
 class WriterRequest(BaseModel):
     parsed_resume: Dict[str, Any]
     jd_text: str
-    selected_github_projects: list
+    selected_github_projects: list = []
+    raw_tex: Optional[str] = None
+    critic_feedback: Optional[Any] = None
 
 
 class ParseTexRequest(BaseModel):
@@ -99,13 +101,28 @@ async def process_resume(
                 )
                 read_only = latex_parser.extract_protected_sections(safe_tex)
 
+                # Restore links for user-facing display fields and Critic Agent so [[LINK_N]] tokens never leak
+                display_sections = {
+                    k: latex_parser.restore_links(v, link_map)
+                    for k, v in editable.items()
+                }
+                display_read_only = {
+                    k: latex_parser.restore_links(v, link_map)
+                    for k, v in read_only.items()
+                }
+                display_chunks = [
+                    latex_parser.restore_links(body, link_map)
+                    for body in editable.values()
+                    if body.strip()
+                ]
+
                 extracted_data = {
                     "format": "latex",
                     "raw_tex": tex_string,
-                    "sections": editable,
-                    "read_only_sections": read_only,
+                    "sections": display_sections,
+                    "read_only_sections": display_read_only,
                     "link_placeholders": link_map,
-                    "chunks": [body for body in editable.values() if body.strip()],
+                    "chunks": display_chunks,
                 }
             else:
                 extracted_data = extract_resume_data(resume_path)
@@ -140,7 +157,22 @@ async def process_resume(
 async def criticize_resume(request: CriticRequest):
     """Run the Critic Agent to analyze resume gaps against a Job Description."""
     try:
-        critique = await run_critic_agent(request.resume_data, request.jd_text)
+        link_map = (
+            request.resume_data.get("link_placeholders")
+            if isinstance(request.resume_data, dict)
+            else None
+        )
+        resume_data = (
+            latex_parser.restore_links_in_obj(request.resume_data, link_map)
+            if link_map
+            else request.resume_data
+        )
+
+        critique = await run_critic_agent(resume_data, request.jd_text)
+
+        if link_map and isinstance(critique, (dict, list, str)):
+            critique = latex_parser.restore_links_in_obj(critique, link_map)
+
         return {
             "status": "success",
             "critique": critique
@@ -212,10 +244,18 @@ async def parse_tex(request: ParseTexRequest):
             safe_tex, include_protected=False
         )
         read_only = latex_parser.extract_protected_sections(safe_tex)
+        display_sections = {
+            k: latex_parser.restore_links(v, link_map)
+            for k, v in sections.items()
+        }
+        display_read_only = {
+            k: latex_parser.restore_links(v, link_map)
+            for k, v in read_only.items()
+        }
         return {
             "status": "success",
-            "sections": sections,
-            "read_only_sections": read_only,
+            "sections": display_sections,
+            "read_only_sections": display_read_only,
             "link_placeholders": link_map,
         }
     except ValueError as e:
