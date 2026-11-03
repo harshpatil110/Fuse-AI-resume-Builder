@@ -17,6 +17,7 @@ import {
   Download,
   Loader2,
 } from 'lucide-react';
+import { API_BASE_URL } from '../config.js';
 
 // ── Reusable form primitives ──
 function FieldLabel({ children }) {
@@ -598,7 +599,7 @@ export default function Editor() {
     const timeoutId = setTimeout(() => controller.abort(), 600000);
     try {
       console.log('📤 REWRITE PAYLOAD BEING SENT:', { parsedResume, rawTex, jdText, criticFeedback });
-      const response = await fetch('http://localhost:5000/api/rewrite', {
+      const response = await fetch(`${API_BASE_URL}/api/rewrite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -642,7 +643,7 @@ export default function Editor() {
     setIsExporting(true);
     setErrorMessage(null);
     try {
-      const response = await fetch('http://localhost:5000/api/export/pdf', {
+      const response = await fetch(`${API_BASE_URL}/api/export/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(resumeData),

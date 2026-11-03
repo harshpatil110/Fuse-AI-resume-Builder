@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { UploadCloud, CheckCircle2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { API_BASE_URL } from '../config.js';
 
 function DropZone({ label, hint, tag, accept, file, onDrop, onClear }) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -108,7 +109,7 @@ export default function Upload() {
       if (jdFile) formData.append('jd_file', jdFile);
       if (jdText) formData.append('jd_text', jdText);
 
-      const response = await fetch('http://localhost:5000/api/upload', {
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
