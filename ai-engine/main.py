@@ -121,9 +121,17 @@ async def process_resume(
                     if body.strip()
                 ]
 
+                # Extract UI JSON representation to populate React FormEditor
+                ui_data = latex_parser.extract_ui_json_from_tex(tex_string)
+
                 extracted_data = {
                     "format": "latex",
                     "raw_tex": tex_string,
+                    "ui_data": ui_data,
+                    "basics": ui_data.get("basics", {}),
+                    "work": ui_data.get("work", []),
+                    "projects": ui_data.get("projects", []),
+                    "skills": ui_data.get("skills", []),
                     "sections": display_sections,
                     "read_only_sections": display_read_only,
                     "link_placeholders": link_map,
@@ -223,6 +231,11 @@ async def rewrite_resume(request: WriterRequest, raw_req: Request):
             pdf_bytes = compile_tex_to_pdf(updated_tex)
             pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
+            # Extract structured UI JSON from the newly updated LaTeX document
+            ui_data = latex_parser.extract_ui_json_from_tex(updated_tex)
+            ui_data["bullet_blocks"] = new_blocks
+            ui_data["raw_tex"] = updated_tex
+
             # Check if caller requested application/pdf binary directly
             accept_header = raw_req.headers.get("accept", "")
             if "application/pdf" in accept_header:
@@ -235,24 +248,10 @@ async def rewrite_resume(request: WriterRequest, raw_req: Request):
             return {
                 "status": "success",
                 "compiled_tex": updated_tex,
+                "tex_string": updated_tex,
                 "pdf_base64": pdf_b64,
-                "rewritten_resume": {
-                    "format": "latex",
-                    "raw_tex": updated_tex,
-                    "bullet_blocks": new_blocks,
-                    "basics": {
-                        "name": "",
-                        "role": "",
-                        "email": "",
-                        "phone": "",
-                        "location": "",
-                        "url": "",
-                        "summary": "LaTeX Resume surgically updated and compiled.",
-                    },
-                    "work": [],
-                    "projects": [],
-                    "skills": [],
-                },
+                "ui_data": ui_data,
+                "rewritten_resume": ui_data,
                 "passed_qa": True,
                 "qa_score": 95,
                 "qa_feedback": "Surgically updated LaTeX bullets and recompiled successfully with pdflatex.",

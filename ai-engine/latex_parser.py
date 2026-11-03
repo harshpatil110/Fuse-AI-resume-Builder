@@ -725,3 +725,232 @@ def inject_bullet_blocks(
 
     return tex_out
 
+
+def clean_latex_text(text: str) -> str:
+    r"""Strip LaTeX markup commands and unescape LaTeX entities into clean readable plain text."""
+    if not text:
+        return ""
+    text = re.sub(r"\\textbf\{([^}]+)\}", r"\1", text)
+    text = re.sub(r"\\textit\{([^}]+)\}", r"\1", text)
+    text = re.sub(r"\\href\{[^}]*\}\{([^}]+)\}", r"\1", text)
+    text = re.sub(r"\\myuline\{([^}]+)\}", r"\1", text)
+    text = re.sub(r"\\underline\{([^}]+)\}", r"\1", text)
+    text = re.sub(r"\\texttt\{([^}]+)\}", r"\1", text)
+    text = re.sub(r"\\(?:small|scshape|bfseries|LARGE|Large|Huge|normalfont|itshape|item)\b", "", text)
+    text = text.replace(r"\%", "%").replace(r"\&", "&").replace(r"\$", "$").replace(r"\#", "#").replace(r"\_", "_")
+    text = re.sub(r"\\\\", " ", text)
+    text = re.sub(r"\\[a-zA-Z]+(?:\*?)", "", text)
+    text = re.sub(r"[{}]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def extract_ui_json_from_tex(tex_string: str) -> Dict[str, Any]:
+    r"""Extract candidate metadata and sections from LaTeX source to populate the React FormEditor UI.
+
+    Extracts:
+      - basics: Name, Role, Email, Phone, Location, URL, Summary
+      - work: List of { company, position, startDate, endDate, location, summary, bullets }
+      - projects: List of { name, description, url, technologies, bullets }
+      - skills: List of skill strings
+    Handles missing regex matches gracefully with empty strings or empty lists.
+    """
+    if not tex_string or not isinstance(tex_string, str):
+        return {
+            "format": "latex",
+            "raw_tex": "",
+            "basics": {"name": "", "role": "", "email": "", "phone": "", "location": "", "url": "", "summary": ""},
+            "work": [],
+            "projects": [],
+            "skills": [],
+        }
+
+    # 1. Name
+    name = ""
+    m_name = (
+        re.search(r"\\textbf\{\\Huge\s*([^}]+)\}", tex_string) or
+        re.search(r"\\Huge\\textbf\{\s*([^}]+)\}", tex_string) or
+        re.search(r"\\Huge\s*\{?([^\\\}\n]+)\}?", tex_string) or
+        re.search(r"\{\\LARGE\\bfseries\s*([^}]+)\}", tex_string) or
+        re.search(r"\{\\Huge\\bfseries\s*([^}]+)\}", tex_string) or
+        re.search(r"\{\\Large\\bfseries\s*([^}]+)\}", tex_string) or
+        re.search(r"\\name\{([^}]+)\}(?:\{([^}]+)\})?", tex_string)
+    )
+    if m_name:
+        name = clean_latex_text(m_name.group(1))
+    elif r"\begin{center}" in tex_string:
+        header_block = re.search(r"\\begin\{center\}(.*?)\\end\{center\}", tex_string, re.DOTALL)
+        if header_block:
+            first_line = header_block.group(1).strip().split("\n")[0]
+            name = clean_latex_text(first_line)
+
+    # 2. Email
+    email = ""
+    m_email = re.search(r"\\href\{mailto:([^}]+)\}", tex_string)
+    if m_email:
+        email = m_email.group(1).strip()
+    else:
+        m_email_fallback = re.search(r"[\w\.-]+@[\w\.-]+\.[a-zA-Z]{2,}", tex_string)
+        if m_email_fallback:
+            email = m_email_fallback.group(0).strip()
+
+    # 3. Phone
+    phone = ""
+    m_phone = (
+        re.search(r"\\faPhone\*?\s*.*?\\texttt\{([^}]+)\}", tex_string) or
+        re.search(r"(?:\\faPhone\*?|\\phone|Phone:?)\s*(?:\\texttt\{)?([+\d\s\(\)-]{8,}\d)(?:\})?", tex_string) or
+        re.search(r"(?:\\faPhone\*?\s*(?:\\texttt\{)?|(?<!\w))(\+?\d{1,3}[\s-]?(?:\(?\d{2,4}\)?[\s-]?)?\d{3,5}[\s.-]?\d{3,5})", tex_string)
+    )
+    if m_phone:
+        phone = m_phone.group(1).strip()
+
+    # 4. URLs
+    linkedin_url = ""
+    github_url = ""
+    general_url = ""
+
+    m_li = re.search(r"\\href\{(https?://(?:www\.)?linkedin\.com/[^}]+)\}", tex_string, re.IGNORECASE)
+    if not m_li:
+        m_li = re.search(r"(?:\\faLinkedin\*?\s*)?\\href\{([^}]+)\}\s*\{[^}]*linkedin", tex_string, re.IGNORECASE)
+    if m_li:
+        linkedin_url = m_li.group(1).strip()
+
+    m_gh = re.search(r"\\href\{(https?://(?:www\.)?github\.com/[^}]+)\}", tex_string, re.IGNORECASE)
+    if not m_gh:
+        m_gh = re.search(r"(?:\\faGithub\*?\s*)?\\href\{([^}]+)\}\s*\{[^}]*github", tex_string, re.IGNORECASE)
+    if m_gh:
+        github_url = m_gh.group(1).strip()
+
+    urls = re.findall(r"\\href\{(https?://[^}]+)\}", tex_string)
+    for u in urls:
+        if "linkedin.com" not in u and "github.com" not in u and not general_url:
+            general_url = u.strip()
+
+    primary_url = linkedin_url or github_url or general_url
+    if not primary_url:
+        m_fallback_url = re.search(r"(?:https?://)?(github\.com/[^\s$\}\\]+|linkedin\.com/in/[^\s$\}\\]+)", tex_string, re.IGNORECASE)
+        if m_fallback_url:
+            raw_u = m_fallback_url.group(0).strip()
+            primary_url = raw_u if raw_u.startswith("http") else f"https://{raw_u}"
+
+    # 5. Summary
+    summary = ""
+    m_sum = re.search(
+        r"\\section\*?\{(?:SUMMARY|Summary|Professional Summary|Objective|Profile)\}(.*?)(?=\\section|\\end\{document\}|$)",
+        tex_string,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m_sum:
+        summary = clean_latex_text(m_sum.group(1))
+
+    # 6. Work Experience
+    work_list = []
+    m_exp = re.search(
+        r"\\section\*?\{(?:EXPERIENCE|Experience|Work Experience|Work History)\}(.*?)(?=\\section|\\end\{document\}|$)",
+        tex_string,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m_exp:
+        exp_body = m_exp.group(1)
+        subheadings = re.split(r"\\resumeSubheading\b", exp_body)[1:]
+        for sub in subheadings:
+            braces = re.findall(r"\{([^{}]*)\}", sub)
+            pos = braces[0] if len(braces) > 0 else ""
+            dates = braces[1] if len(braces) > 1 else ""
+            company = braces[2] if len(braces) > 2 else ""
+            loc = braces[3] if len(braces) > 3 else ""
+
+            bullets = [
+                clean_latex_text(b)
+                for b in re.findall(r"\\resumeItem\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}", sub)
+            ]
+
+            work_list.append({
+                "company": clean_latex_text(company),
+                "position": clean_latex_text(pos),
+                "startDate": clean_latex_text(dates.split("--")[0] if "--" in dates else dates),
+                "endDate": clean_latex_text(dates.split("--")[1] if "--" in dates else ""),
+                "location": clean_latex_text(loc),
+                "summary": "",
+                "bullets": bullets,
+            })
+
+    # 7. Projects
+    projects_list = []
+    m_proj = re.search(
+        r"\\section\*?\{(?:PROJECTS|Projects|Technical Projects|Personal Projects)\}(.*?)(?=\\section|\\end\{document\}|$)",
+        tex_string,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m_proj:
+        proj_body = m_proj.group(1)
+        proj_headings = re.split(r"\\resumeProjectHeading\b", proj_body)[1:]
+        for proj in proj_headings:
+            m_pname = re.search(r"\\textbf\{([^}]+)\}", proj)
+            pname = m_pname.group(1) if m_pname else "Project"
+
+            m_purl = re.search(r"\\href\{([^}]+)\}", proj)
+            purl = m_purl.group(1) if m_purl else ""
+
+            bullets = [
+                clean_latex_text(b)
+                for b in re.findall(r"\\resumeItem\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}", proj)
+            ]
+
+            projects_list.append({
+                "name": clean_latex_text(pname),
+                "description": "",
+                "url": purl,
+                "technologies": [],
+                "bullets": bullets,
+            })
+
+    # 8. Skills
+    skills_list: List[str] = []
+    m_skills = re.search(
+        r"\\section\*?\{(?:TECHNICAL\s+SKILLS|Technical\s+Skills|SKILLS|Skills)\}(.*?)(?=\\section|\\end\{document\}|$)",
+        tex_string,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m_skills:
+        skills_body = m_skills.group(1)
+        raw_lines = skills_body.split("\n")
+        for line in raw_lines:
+            if any(bad in line for bad in ("begin{", "end{", "leftmargin", "label=")):
+                continue
+            cleaned_line = clean_latex_text(line)
+            if not cleaned_line:
+                continue
+            if ":" in cleaned_line:
+                cleaned_line = cleaned_line.split(":", 1)[1].strip()
+            tokens = [t.strip() for t in re.split(r"[,;•|/]", cleaned_line) if t.strip()]
+            for t in tokens:
+                if t and t not in skills_list and len(t) < 40 and not t.startswith("\\"):
+                    skills_list.append(t)
+
+    # 9. Role & Location derivation from work experience if missing from header
+    role = ""
+    if work_list and work_list[0].get("position"):
+        role = work_list[0]["position"]
+
+    location = ""
+    if work_list and work_list[0].get("location"):
+        location = work_list[0]["location"]
+
+    return {
+        "format": "latex",
+        "raw_tex": tex_string,
+        "basics": {
+            "name": name,
+            "role": role,
+            "email": email,
+            "phone": phone,
+            "location": location,
+            "url": primary_url,
+            "summary": summary,
+        },
+        "work": work_list,
+        "projects": projects_list,
+        "skills": skills_list,
+    }
+

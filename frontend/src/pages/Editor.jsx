@@ -548,7 +548,12 @@ export default function Editor() {
   const [isRewriting, setIsRewriting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
-  const [resumeData, setResumeData] = useState(null);
+  const [resumeData, setResumeData] = useState(() => {
+    const pr = rawData.parsed_resume || rawData.parsedResume || location.state?.parsed_resume;
+    if (pr?.ui_data) return pr.ui_data;
+    if (pr?.basics) return pr;
+    return null;
+  });
 
   const handleApproveAndGenerate = async () => {
     const parsedResume =
@@ -611,8 +616,12 @@ export default function Editor() {
       }
 
       const data = await response.json();
-      const rewritten = data.rewritten_resume || data;
-      setResumeData(rewritten);
+      const uiData = data.ui_data || data.rewritten_resume || data;
+      const finalResume = {
+        ...uiData,
+        raw_tex: data.compiled_tex || data.tex_string || uiData.raw_tex || rawTex,
+      };
+      setResumeData(finalResume);
       setViewMode('form');
     } catch (err) {
       const detail = err?.response?.data || err?.message || err;
