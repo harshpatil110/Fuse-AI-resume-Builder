@@ -662,6 +662,43 @@ def sanitize_latex_bullets(bullets_text: str) -> str:
     return bullets_text
 
 
+def normalize_bullet_block(block_text: str) -> str:
+    r"""Ensure a block string is strictly formatted with \resumeItem{...} entries.
+
+    Strips markdown code fences, removes accidental bullet characters (*, -),
+    converts escaped newlines, and ensures each bullet line is cleanly wrapped in \resumeItem{...}.
+    """
+    cleaned = block_text.strip()
+    # Convert literal escaped newlines (e.g. \n or \r\n from JSON strings) to actual newlines
+    cleaned = cleaned.replace(r"\r\n", "\n").replace(r"\n", "\n")
+
+    # Strip markdown code fences (```latex ... ``` or ``` ... ```)
+    cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*\n?", "", cleaned)
+    cleaned = re.sub(r"\n?```\s*$", "", cleaned).strip()
+
+    # Remove outer \resumeItemListStart / \resumeItemListEnd if already present
+    cleaned = re.sub(r"^\\resumeItemListStart\s*", "", cleaned)
+    cleaned = re.sub(r"\s*\\resumeItemListEnd$", "", cleaned).strip()
+
+    lines = cleaned.split("\n")
+    normalized_items: List[str] = []
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        # Strip markdown bullet markers (-, *, •)
+        line_str = re.sub(r"^[-*•]\s*", "", line_str)
+        # If the line is already a \resumeItem{...}, keep it; otherwise wrap it
+        if not line_str.startswith(r"\resumeItem"):
+            line_str = f"\\resumeItem{{{line_str}}}"
+        normalized_items.append(f"    {line_str}")
+
+    if not normalized_items:
+        return "\\resumeItemListStart\n\\resumeItemListEnd"
+
+    return "\\resumeItemListStart\n" + "\n".join(normalized_items) + "\n\\resumeItemListEnd"
+
+
 def inject_bullet_blocks(
     master_template: str,
     new_blocks: Sequence[str],
@@ -682,14 +719,8 @@ def inject_bullet_blocks(
     tex_out = master_template
     for i in range(min(len(blocks), len(new_blocks)) - 1, -1, -1):
         block = blocks[i]
-        new_content = sanitize_latex_bullets(new_blocks[i].strip())
-
-        # Ensure \resumeItemListStart and \resumeItemListEnd delimiters are intact
-        if not new_content.startswith(r"\resumeItemListStart"):
-            new_content = r"\resumeItemListStart" + "\n" + new_content
-        if not new_content.endswith(r"\resumeItemListEnd"):
-            new_content = new_content + "\n" + r"\resumeItemListEnd"
-
+        new_content = normalize_bullet_block(new_blocks[i])
+        new_content = sanitize_latex_bullets(new_content)
         tex_out = tex_out[:block.full_start] + new_content + tex_out[block.full_end:]
 
     return tex_out

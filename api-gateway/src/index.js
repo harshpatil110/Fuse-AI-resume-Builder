@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
+import { freePort } from './utils/freePort.js';
 import authRoutes from './routes/auth.js';
 import uploadRoutes from './routes/upload.js';
 import githubRoutes from './routes/github.js';
@@ -51,25 +52,27 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-const server = app.listen(port, (err) => {
-  if (err) {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${port} is already in use.`);
-    } else {
-      console.error('❌ Server startup error:', err);
-    }
-    process.exit(1);
-    return;
-  }
+// Ensure port is free before attempting to listen
+freePort(port);
+
+const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
 
+let retried = false;
 server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${port} is already in use.`);
-  } else {
-    console.error('❌ Server error:', err);
+  if (err.code === 'EADDRINUSE' && !retried) {
+    retried = true;
+    console.warn(`⚠️ Port ${port} is in use. Freeing port and retrying...`);
+    freePort(port);
+    setTimeout(() => {
+      server.listen(port, () => {
+        console.log(`Server running on port ${port}`);
+      });
+    }, 500);
+    return;
   }
+  console.error(`❌ Server startup error:`, err);
   process.exit(1);
 });
 

@@ -191,14 +191,11 @@ async def rewrite_latex_bullets(
         for i in range(len(new_blocks), len(blocks)):
             new_blocks.append(blocks[i].original_bullets)
 
-    # In-place surgical injection
+    # In-place surgical injection (inject_bullet_blocks normalizes and sanitizes new bullet blocks)
     injected_tex = latex_parser.inject_bullet_blocks(safe_tex, new_blocks)
 
     # Restore hyperlinks
     final_tex = latex_parser.restore_links(injected_tex, link_map)
-
-    # Sanitize any raw % or & that might break pdflatex
-    final_tex = latex_parser.sanitize_latex_bullets(final_tex)
 
     logger.info("Surgically injected %d bullet block(s) into master template.", len(new_blocks))
     return final_tex, new_blocks
