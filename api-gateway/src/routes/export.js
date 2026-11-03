@@ -11,8 +11,13 @@ router.post('/pdf', async (req, res) => {
       return res.status(400).json({ error: 'Invalid resume data provided' });
     }
 
+    // Vercel-deploy branch only: on Vercel there is no pdflatex, so the
+    // engine compile-tex path would always fail. Fall through to generatePDF,
+    // which on Vercel renders the structured data with pdfkit (clean layout,
+    // not the original LaTeX template). Locally the pdflatex path below is
+    // unchanged.
     // If LaTeX format is detected, compile directly via AI Engine's pdflatex pipeline
-    if (resumeData.raw_tex || resumeData.format === 'latex' || resumeData.tex) {
+    if (process.env.VERCEL !== '1' && (resumeData.raw_tex || resumeData.format === 'latex' || resumeData.tex)) {
       const tex = resumeData.raw_tex || resumeData.tex;
       const aiResponse = await axios.post(
         `${process.env.AI_ENGINE_URL || 'http://localhost:8000'}/api/compile-tex`,
@@ -47,7 +52,7 @@ router.post('/pdf', async (req, res) => {
     res.send(pdfBuffer);
   } catch (error) {
     console.error('Error generating PDF:', error);
-    res.status(500).json({ error: 'Failed to generate PDF' });
+    res.status(500).json({ error: error?.message ? `Failed to generate PDF: ${error.message}` : 'Failed to generate PDF' });
   }
 });
 
