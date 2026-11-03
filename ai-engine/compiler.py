@@ -99,7 +99,10 @@ def compile_tex_to_pdf(tex_string: str, output_name: str = "resume") -> bytes:
             pdflatex (message includes the tail of the LaTeX log).
         RuntimeError: if no pdflatex binary is available.
     """
-    temp_root = Path("temp")
+    # Vercel-deploy branch only: Vercel serverless functions can only write to
+    # /tmp; the bundled temp/ directory is read-only (Errno 30 on deployment).
+    # Locally (VERCEL unset) behaviour is unchanged.
+    temp_root = Path("/tmp/temp") if os.environ.get("VERCEL") == "1" else Path("temp")
     temp_root.mkdir(exist_ok=True)
 
     workdir = temp_root / f"fuse_compile_{uuid.uuid4().hex}"

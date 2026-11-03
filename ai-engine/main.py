@@ -231,9 +231,26 @@ async def rewrite_resume(request: WriterRequest, raw_req: Request):
                 request.selected_github_projects
             )
 
-            # Compile to PDF using local pdflatex
-            pdf_bytes = compile_tex_to_pdf(updated_tex)
-            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+            # Compile to PDF using local pdflatex — Vercel-deploy branch only:
+            # Vercel has no pdflatex binary, so a missing binary must NOT fail
+            # the whole rewrite. The rewritten .tex is the real deliverable and
+            # the Editor only needs compiled_tex/tex_string + ui_data; a real
+            # pdflatex rejection (LatexCompileError) still propagates as 422.
+            # Locally (pdflatex present) behaviour is unchanged.
+            try:
+                pdf_bytes = compile_tex_to_pdf(updated_tex)
+                pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+                qa_feedback = "Surgically updated LaTeX bullets and recompiled successfully with pdflatex."
+            except (RuntimeError, OSError) as compile_env_error:
+                logger.warning(f"PDF compile skipped on Vercel (no pdflatex): {compile_env_error}")
+                pdf_bytes = None
+                pdf_b64 = None
+                qa_feedback = (
+                    "Surgically updated LaTeX bullets. PDF compile was skipped "
+                    "on Vercel (no pdflatex available there) — the rewritten "
+                    ".tex below is complete; compile it locally or in Overleaf "
+                    "to get the PDF."
+                )
 
             # Extract structured UI JSON from the newly updated LaTeX document
             ui_data = latex_parser.extract_ui_json_from_tex(updated_tex)
@@ -243,6 +260,11 @@ async def rewrite_resume(request: WriterRequest, raw_req: Request):
             # Check if caller requested application/pdf binary directly
             accept_header = raw_req.headers.get("accept", "")
             if "application/pdf" in accept_header:
+                if pdf_bytes is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="pdflatex is not available on Vercel, so a PDF cannot be compiled here. Use the rewritten .tex from the JSON response instead.",
+                    )
                 return Response(
                     content=pdf_bytes,
                     media_type="application/pdf",
@@ -258,7 +280,7 @@ async def rewrite_resume(request: WriterRequest, raw_req: Request):
                 "rewritten_resume": ui_data,
                 "passed_qa": True,
                 "qa_score": 95,
-                "qa_feedback": "Surgically updated LaTeX bullets and recompiled successfully with pdflatex.",
+                "qa_feedback": qa_feedback,
                 "qa_attempts": 1,
                 "metric_fixes": 0,
             }
