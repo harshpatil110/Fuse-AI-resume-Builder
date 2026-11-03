@@ -6,7 +6,7 @@ Houses the multi-agent workflow: Critic Agent, Writer Agent, etc.
 
 import json
 import logging
-from typing import Dict, Sequence
+from typing import Dict, List, Sequence, Tuple
 
 import latex_parser
 import github_fetch
@@ -14,6 +14,7 @@ from prompt import (
     IMMUTABLE_CONTENT_CONSTRAINT,
     METRIC_FABRICATION_CONSTRAINT,
     SKILL_GROUNDING_CONSTRAINT,
+    SURGICAL_WRITER_SYSTEM_INSTRUCTION,
 )
 from prompts.template_manager import TemplateManager
 from llm_utils import generate_json_completion
@@ -115,6 +116,92 @@ async def run_github_matching_agent(github_repos: list, jd_text: str) -> dict:
     logger.info(f"GitHub Matching Agent selected {len(result.get('selected_projects', []))} projects.")
 
     return result
+
+
+async def rewrite_latex_bullets(
+    tex_string: str,
+    jd_text: str,
+    github_projects: list = None,
+) -> Tuple[str, List[str]]:
+    r"""In-Place Surgical Regex Replacement: Rewrite ONLY the bullet points in Experience and Projects.
+
+    Extracts ONLY the blocks between \resumeItemListStart and \resumeItemListEnd,
+    passes them to the Writer Agent with the strict surgical prompt, and injects
+    the resulting \resumeItem{} blocks back into the exact positions in tex_string.
+    All headings (\resumeSubheading, \resumeProjectHeading), preamble, header,
+    education, and achievements remain 100% byte-for-byte untouched.
+    """
+    safe_tex, link_map = latex_parser.protect_links(tex_string)
+    blocks = latex_parser.extract_bullet_blocks(safe_tex)
+    if not blocks:
+        logger.warning("No surgical bullet blocks found in LaTeX resume.")
+        return tex_string, []
+
+    formatted_blocks = []
+    for b in blocks:
+        formatted_blocks.append(
+            f"<BLOCK index=\"{b.index}\" section=\"{b.section}\">\n"
+            f"Context: {b.heading_context}\n"
+            f"Current Bullets:\n{b.original_bullets}\n"
+            f"</BLOCK>"
+        )
+    blocks_str = "\n\n".join(formatted_blocks)
+
+    system_message = (
+        f"{SURGICAL_WRITER_SYSTEM_INSTRUCTION} "
+        f"{IMMUTABLE_CONTENT_CONSTRAINT} "
+        f"{METRIC_FABRICATION_CONSTRAINT} "
+        f"{SKILL_GROUNDING_CONSTRAINT}"
+    )
+
+    prompt = (
+        "You are provided with existing resume bullet points and a target Job Description.\n"
+        "Your task: rewrite and improve the impact of the bullet points, injecting missing keywords from the JD.\n\n"
+        f"<JOB_DESCRIPTION>\n{jd_text}\n</JOB_DESCRIPTION>\n\n"
+        f"<EXISTING_BULLET_BLOCKS>\n{blocks_str}\n</EXISTING_BULLET_BLOCKS>\n\n"
+        "MANDATORY OUTPUT FORMAT:\n"
+        "Return ONLY a valid JSON object with a 'blocks' key containing an array of strings (one string per block, matching the exact order of blocks above).\n"
+        "Inside each block string, output ONLY the LaTeX bullet points wrapped in \\resumeItem{...}.\n"
+        "Example output:\n"
+        "{\n"
+        '  "blocks": [\n'
+        '    "\\\\resumeItem{Architected scalable microservices using FastAPI...}\\n\\\\resumeItem{Reduced latency by 20%...}",\n'
+        '    "\\\\resumeItem{Engineered distributed vector search using FAISS...}"\n'
+        "  ]\n"
+        "}"
+    )
+
+    logger.info("Running Surgical LaTeX Bullet Writer Agent for %d block(s)...", len(blocks))
+    result = generate_json_completion(prompt, system_message)
+
+    # Robust parsing of returned blocks
+    new_blocks = []
+    if isinstance(result, dict) and "blocks" in result and isinstance(result["blocks"], list):
+        new_blocks = [str(x) for x in result["blocks"]]
+    elif isinstance(result, list):
+        new_blocks = [str(x) for x in result]
+    elif isinstance(result, dict):
+        for i in range(len(blocks)):
+            val = result.get(str(i)) or result.get(f"block_{i}") or result.get(f"block{i}")
+            if val is not None:
+                new_blocks.append(str(val))
+
+    # If parsing produced fewer blocks, fallback remaining to original
+    if len(new_blocks) < len(blocks):
+        for i in range(len(new_blocks), len(blocks)):
+            new_blocks.append(blocks[i].original_bullets)
+
+    # In-place surgical injection
+    injected_tex = latex_parser.inject_bullet_blocks(safe_tex, new_blocks)
+
+    # Restore hyperlinks
+    final_tex = latex_parser.restore_links(injected_tex, link_map)
+
+    # Sanitize any raw % or & that might break pdflatex
+    final_tex = latex_parser.sanitize_latex_bullets(final_tex)
+
+    logger.info("Surgically injected %d bullet block(s) into master template.", len(new_blocks))
+    return final_tex, new_blocks
 
 
 async def rewrite_latex_sections(
@@ -241,9 +328,20 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
         f"{GROUNDING_VALIDATOR_RULE}"
     )
 
+    link_map = (
+        parsed_resume.get("link_placeholders")
+        if isinstance(parsed_resume, dict)
+        else None
+    )
+    safe_parsed_resume = (
+        latex_parser.protect_links_in_obj(parsed_resume, link_map)
+        if link_map
+        else parsed_resume
+    )
+
     prompt = template_manager.render_template(
         "writer_agent",
-        parsed_resume=json.dumps(parsed_resume, indent=2),
+        parsed_resume=json.dumps(safe_parsed_resume, indent=2),
         jd_text=jd_text,
         selected_github_projects=json.dumps(selected_github_projects, indent=2),
     )
@@ -255,6 +353,8 @@ async def run_writer_agent(parsed_resume: dict, jd_text: str, selected_github_pr
     result = generate_json_completion(prompt, system_message)
     # Anti-hallucination: strip any proposed skill not proven in the bullets.
     result = ground_resume_skills(result, extract_known_skills(parsed_resume))
+    if link_map and isinstance(result, (dict, list, str)):
+        result = latex_parser.restore_links_in_obj(result, link_map)
     logger.info("Writer Agent finished. Resume rewrite complete.")
 
     return result
@@ -289,9 +389,20 @@ async def run_writer_agent_with_feedback(
             f"</PREVIOUS_EVALUATION_FEEDBACK>"
         )
 
+    link_map = (
+        parsed_resume.get("link_placeholders")
+        if isinstance(parsed_resume, dict)
+        else None
+    )
+    safe_parsed_resume = (
+        latex_parser.protect_links_in_obj(parsed_resume, link_map)
+        if link_map
+        else parsed_resume
+    )
+
     prompt = template_manager.render_template(
         "writer_agent",
-        parsed_resume=json.dumps(parsed_resume, indent=2),
+        parsed_resume=json.dumps(safe_parsed_resume, indent=2),
         jd_text=jd_text,
         selected_github_projects=json.dumps(selected_github_projects, indent=2),
     )
@@ -306,6 +417,8 @@ async def run_writer_agent_with_feedback(
     result = generate_json_completion(prompt, system_message)
     # Anti-hallucination: strip any proposed skill not proven in the bullets.
     result = ground_resume_skills(result, extract_known_skills(parsed_resume))
+    if link_map and isinstance(result, (dict, list, str)):
+        result = latex_parser.restore_links_in_obj(result, link_map)
     logger.info("Writer Agent finished.")
 
     return result

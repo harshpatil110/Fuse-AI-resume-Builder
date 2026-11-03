@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # Sectioning commands treated as editable blocks. \section and \section* cover
 # the vast majority of resume templates; extend via the ``section_commands`` arg.
@@ -355,6 +355,41 @@ def restore_links(tex_string: str, link_map: Dict[str, str]) -> str:
     return _LINK_TOKEN_RE.sub(_replace, tex_string)
 
 
+def restore_links_in_obj(obj: Any, link_map: Dict[str, str]) -> Any:
+    """Recursively restore [[LINK_N]] tokens across strings, dicts, and lists."""
+    if not link_map:
+        return obj
+    if isinstance(obj, str):
+        return restore_links(obj, link_map)
+    if isinstance(obj, dict):
+        return {k: restore_links_in_obj(v, link_map) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [restore_links_in_obj(item, link_map) for item in obj]
+    return obj
+
+
+def protect_links_with_map(text: str, link_map: Dict[str, str]) -> str:
+    """Replace occurrences of original \\href commands with their [[LINK_N]] tokens."""
+    if not link_map or not isinstance(text, str):
+        return text
+    for token, original_cmd in link_map.items():
+        text = text.replace(original_cmd, token)
+    return text
+
+
+def protect_links_in_obj(obj: Any, link_map: Dict[str, str]) -> Any:
+    """Recursively swap original \\href commands to [[LINK_N]] tokens using link_map."""
+    if not link_map:
+        return obj
+    if isinstance(obj, str):
+        return protect_links_with_map(obj, link_map)
+    if isinstance(obj, dict):
+        return {k: protect_links_in_obj(v, link_map) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [protect_links_in_obj(item, link_map) for item in obj]
+    return obj
+
+
 def inject_editable_sections(
     tex_string: str,
     sections: Dict[str, str],
@@ -536,4 +571,126 @@ def pre_compile_fixups(tex_string: str) -> str:
     for old, new in _PRE_COMPILE_REPLACEMENTS:
         tex_string = tex_string.replace(old, new)
     return tex_string
+
+
+# ── In-Place Surgical Regex Replacement Architecture ─────────────────────────
+SURGICAL_SECTION_KEYWORDS = ("experience", "project", "projects", "work")
+
+
+def is_surgical_section(title: str) -> bool:
+    r"""Return True if section title denotes Experience or Projects (and is not protected)."""
+    if is_protected_title(title):
+        return False
+    lower = title.strip().lower()
+    return any(keyword in lower for keyword in SURGICAL_SECTION_KEYWORDS)
+
+
+@dataclass
+class BulletBlock:
+    """A single \\resumeItemListStart … \\resumeItemListEnd block inside Experience or Projects."""
+    index: int
+    section: str
+    heading_context: str
+    original_bullets: str
+    start: int          # index of content start (just after \resumeItemListStart)
+    end: int            # index of content end (just before \resumeItemListEnd)
+    full_start: int     # index of \ in \resumeItemListStart
+    full_end: int       # index just after \resumeItemListEnd
+
+
+def extract_bullet_blocks(
+    tex_string: str,
+    section_commands: Sequence[str] = DEFAULT_SECTION_COMMANDS,
+) -> List[BulletBlock]:
+    r"""Locate all item list blocks inside the Experience and Projects sections.
+
+    Extracts ONLY the blocks between \resumeItemListStart and \resumeItemListEnd
+    under sections matching Experience or Projects. Protected sections
+    (Education, Achievements, Awards, Contact) are completely excluded.
+    """
+    spans = find_sections(tex_string, section_commands)
+    blocks: List[BulletBlock] = []
+    block_index = 0
+
+    for span in spans:
+        if not is_surgical_section(span.title):
+            continue
+
+        item_spans = find_item_list_spans(span.body)
+        last_offset = 0
+        for item in item_spans:
+            # Extract heading context before this item list
+            heading_text = span.body[last_offset:item.start].strip()
+            last_offset = item.end
+
+            m_start = _ITEM_LIST_START_RE.search(item.content)
+            m_end = _ITEM_LIST_END_RE.search(item.content)
+            content_start_rel = m_start.end() if m_start else 0
+            content_end_rel = m_end.start() if m_end else len(item.content)
+            bullets_text = item.content[content_start_rel:content_end_rel].strip()
+
+            abs_full_start = span.body_start + item.start
+            abs_full_end = span.body_start + item.end
+            abs_start = abs_full_start + content_start_rel
+            abs_end = abs_full_start + content_end_rel
+
+            blocks.append(
+                BulletBlock(
+                    index=block_index,
+                    section=span.title.strip(),
+                    heading_context=heading_text,
+                    original_bullets=bullets_text,
+                    start=abs_start,
+                    end=abs_end,
+                    full_start=abs_full_start,
+                    full_end=abs_full_end,
+                )
+            )
+            block_index += 1
+
+    return blocks
+
+
+def sanitize_latex_bullets(bullets_text: str) -> str:
+    r"""Ensure unescaped LaTeX special characters (%, &, #) are safely escaped so pdflatex never fails."""
+    # Escape unescaped % (e.g. 20% -> 20\%)
+    bullets_text = re.sub(r"(?<!\\)%", r"\%", bullets_text)
+    # Escape unescaped & (e.g. React & Node -> React \& Node)
+    bullets_text = re.sub(r"(?<!\\)&", r"\&", bullets_text)
+    # Escape unescaped # (e.g. C# -> C\#)
+    bullets_text = re.sub(r"(?<!\\)#", r"\#", bullets_text)
+    return bullets_text
+
+
+def inject_bullet_blocks(
+    master_template: str,
+    new_blocks: Sequence[str],
+    section_commands: Sequence[str] = DEFAULT_SECTION_COMMANDS,
+) -> str:
+    r"""Surgically replace the old item list blocks with new \resumeItem{...} blocks.
+
+    In-place replacement: Modifies ONLY the contents within \resumeItemListStart
+    and \resumeItemListEnd in the Experience and Projects sections. The preamble,
+    custom macros, headings (\resumeSubheading, \resumeProjectHeading), header,
+    education, and achievements remain 100% byte-for-byte untouched.
+    """
+    blocks = extract_bullet_blocks(master_template, section_commands)
+    if not blocks or not new_blocks:
+        return master_template
+
+    # Apply replacements from back to front by full_start offset so earlier offsets remain valid
+    tex_out = master_template
+    for i in range(min(len(blocks), len(new_blocks)) - 1, -1, -1):
+        block = blocks[i]
+        new_content = sanitize_latex_bullets(new_blocks[i].strip())
+
+        # Ensure \resumeItemListStart and \resumeItemListEnd delimiters are intact
+        if not new_content.startswith(r"\resumeItemListStart"):
+            new_content = r"\resumeItemListStart" + "\n" + new_content
+        if not new_content.endswith(r"\resumeItemListEnd"):
+            new_content = new_content + "\n" + r"\resumeItemListEnd"
+
+        tex_out = tex_out[:block.full_start] + new_content + tex_out[block.full_end:]
+
+    return tex_out
 
