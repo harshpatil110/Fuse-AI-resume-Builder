@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+temp/
+temp_uploads/
+scratch/
+.venv/
+venv/

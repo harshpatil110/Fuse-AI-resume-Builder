@@ -1,0 +1,45 @@
+# Render Blueprint — Fuse AI Engine only (vercel-deploy branch only)
+#
+# How to use (no card needed for the Free plan):
+#   1. Sign in at render.com with GitHub.
+#   2. Dashboard → New → Blueprint → select
+#      harshpatil110/Fuse-AI-resume-Builder, branch vercel-deploy.
+#   3. Render pre-fills this file. Set the env vars below in the dashboard
+#      (they are marked sync: false here on purpose — secrets are NEVER
+#      committed to the repo).
+#   4. Deploy. First build takes a while (TeX Live apt install) — that is
+#      normal. The service URL will be https://fuse-ai-engine.onrender.com
+#      (or similar, if that name is taken).
+#
+# What this does NOT deploy: the Vercel frontend and gateway stay exactly
+# where they are. Only the AI engine moves — the Vercel gateway's
+# AI_ENGINE_URL env var is then pointed at this Render URL, so
+# /api/upload, /api/rewrite and /api/export/pdf all go to Render, which
+# has real pdflatex and can return the exact-template PDF.
+#
+# Free-tier limits to expect (Render, 2026):
+#   - 512 MB RAM, shared CPU, 750 free hours/month.
+#   - Sleeps after ~15 min idle; first request after sleep takes ~30-60 s
+#     to wake. That is normal, not a failure — the gateway/frontend
+#     timeouts (180-600 s) cover it.
+#   - Disk is ephemeral; uploads live only for the request, which is how
+#     the engine already works.
+
+services:
+  - type: web
+    name: fuse-ai-engine
+    env: docker
+    branch: vercel-deploy
+    rootDir: ai-engine
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /docs
+    envVars:
+      - key: NVIDIA_NIM_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        sync: false
+      - key: DEFAULT_MODEL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
