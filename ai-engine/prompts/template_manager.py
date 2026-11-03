@@ -18,13 +18,16 @@ class TemplateManager:
     different resume sections (basics, work, education, skills, projects, awards).
     """
 
-    def __init__(self, template_dir: str = "prompts/templates"):
+    def __init__(self, template_dir: str = None):
         """
         Initialize the template manager.
 
         Args:
-            template_dir (str): Directory containing Jinja templates
+            template_dir (str, optional): Directory containing Jinja templates
         """
+        default_dir = os.path.join(os.path.dirname(__file__), "templates")
+        if template_dir is None or not os.path.exists(template_dir):
+            template_dir = default_dir
         self.template_dir = template_dir
         self.env = Environment(
             loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True
@@ -57,9 +60,9 @@ class TemplateManager:
                 if os.path.exists(template_path):
                     self._templates[section_name] = self.env.get_template(filename)
                 else:
-                    print(f"⚠️ Template file not found: {template_path}")
+                    print(f"[warning] Template file not found: {template_path}")
             except Exception as e:
-                print(f"❌ Error loading template {filename}: {e}")
+                print(f"[error] Error loading template {filename}: {e}")
 
     def get_available_sections(self) -> list:
         """
