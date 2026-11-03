@@ -71,7 +71,7 @@ function SectionCard({ icon: Icon, title, children }) {
 }
 
 // ── Interactive Form Editor (viewMode === 'form') ──
-function FormEditor({ resume, setResume, onExport, isExporting }) {
+function FormEditor({ resume, setResume, onExport, onDownloadTex, isExporting }) {
   const safe = (value, fallback) => (Array.isArray(value) ? value : Array.isArray(fallback) ? fallback : []);
 
   const updateBasics = (field, value) => {
@@ -212,6 +212,17 @@ function FormEditor({ resume, setResume, onExport, isExporting }) {
             </p>
             <h1 className="text-2xl font-bold tracking-tight text-stone-900">Interactive Editor</h1>
           </div>
+          <div className="flex items-center gap-2">
+          {onDownloadTex && resume.raw_tex && (
+            <button
+              onClick={onDownloadTex}
+              title="Download the rewritten .tex (exact template) — compile locally or in Overleaf for the exact-layout PDF"
+              className="bg-white border border-stone-300 text-stone-900 rounded-sm px-4 py-2.5 text-sm font-medium tracking-wide hover:border-stone-500 transition-colors duration-300 flex items-center gap-2"
+            >
+              <Download size={16} strokeWidth={1.5} />
+              Download .tex
+            </button>
+          )}
           <button
             onClick={onExport}
             disabled={isExporting}
@@ -229,6 +240,7 @@ function FormEditor({ resume, setResume, onExport, isExporting }) {
               </>
             )}
           </button>
+          </div>
         </div>
       </div>
 
@@ -638,6 +650,25 @@ export default function Editor() {
     }
   };
 
+  // Vercel-deploy branch only: download the surgically rewritten .tex exactly
+  // as returned by /api/rewrite (master template untouched except bullets).
+  // Compiling this file locally / in Overleaf gives the exact-template PDF
+  // (same as a local run) — Vercel has no pdflatex, so the server cannot
+  // produce that PDF itself, and a pdfkit substitute must never be passed
+  // off as the template PDF.
+  const handleDownloadTex = () => {
+    if (!resumeData?.raw_tex) return;
+    const blob = new Blob([resumeData.raw_tex], { type: 'text/x-tex' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'optimized-resume.tex';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleExport = async () => {
     if (!resumeData) return;
     setIsExporting(true);
@@ -680,7 +711,7 @@ export default function Editor() {
             {errorMessage}
           </div>
         )}
-        <FormEditor resume={resumeData} setResume={setResumeData} onExport={handleExport} isExporting={isExporting} />
+        <FormEditor resume={resumeData} setResume={setResumeData} onExport={handleExport} onDownloadTex={handleDownloadTex} isExporting={isExporting} />
       </div>
     );
   }

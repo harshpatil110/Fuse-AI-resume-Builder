@@ -11,13 +11,18 @@ router.post('/pdf', async (req, res) => {
       return res.status(400).json({ error: 'Invalid resume data provided' });
     }
 
-    // Vercel-deploy branch only: on Vercel there is no pdflatex, so the
-    // engine compile-tex path would always fail. Fall through to generatePDF,
-    // which on Vercel renders the structured data with pdfkit (clean layout,
-    // not the original LaTeX template). Locally the pdflatex path below is
-    // unchanged.
+    // Vercel-deploy branch only — BUG FIX (2026-11-04): a LaTeX resume must
+    // NEVER fall through to generatePDF/pdfkit on Vercel. pdfkit renders only
+    // the structured fields (basics/work/projects/skills) in a plain A4
+    // layout and leaks LaTeX debris from the extracted fields — that is what
+    // produced the wrong "optimized-resume (8)" PDF, while the local
+    // pdflatex run produced the exact template PDF "(7)". A LaTeX resume
+    // must go through the engine's pdflatex compile only. On Vercel that
+    // compile fails (no pdflatex binary) and the error below says so
+    // plainly, with the .tex download in the Editor as the exact-template
+    // path — a clear failure is correct, a wrong-layout PDF is not.
     // If LaTeX format is detected, compile directly via AI Engine's pdflatex pipeline
-    if (process.env.VERCEL !== '1' && (resumeData.raw_tex || resumeData.format === 'latex' || resumeData.tex)) {
+    if (resumeData.raw_tex || resumeData.format === 'latex' || resumeData.tex) {
       const tex = resumeData.raw_tex || resumeData.tex;
       const aiResponse = await axios.post(
         `${process.env.AI_ENGINE_URL || 'http://localhost:8000'}/api/compile-tex`,
@@ -52,7 +57,23 @@ router.post('/pdf', async (req, res) => {
     res.send(pdfBuffer);
   } catch (error) {
     console.error('Error generating PDF:', error);
-    res.status(500).json({ error: error?.message ? `Failed to generate PDF: ${error.message}` : 'Failed to generate PDF' });
+    // Forward the engine's real detail (e.g. "pdflatex not found") instead
+    // of hiding it behind a generic message.
+    let detail = null;
+    if (error?.response?.data) {
+      try {
+        const body = Buffer.isBuffer(error.response.data)
+          ? JSON.parse(Buffer.from(error.response.data).toString('utf-8'))
+          : error.response.data;
+        detail = body?.detail || body?.error || null;
+      } catch { /* non-JSON body */ }
+    }
+    const message = detail || error?.message || 'Failed to generate PDF';
+    res.status(500).json({
+      error: detail && detail.includes('pdflatex')
+        ? `Failed to generate PDF: ${detail} Vercel has no pdflatex, so the exact-template PDF cannot be compiled here — use "Download .tex" in the Editor and compile it locally or in Overleaf.`
+        : `Failed to generate PDF: ${message}`,
+    });
   }
 });
 
