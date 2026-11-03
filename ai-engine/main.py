@@ -34,7 +34,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TEMP_UPLOADS_DIR = "temp_uploads"
+# Vercel-deploy branch only: Vercel serverless functions can only write to
+# /tmp; the bundled temp_uploads/ directory is read-only at runtime, so
+# writing an uploaded resume there would fail like the gateway uploads/ did.
+# Locally (VERCEL unset) behaviour is unchanged.
+TEMP_UPLOADS_DIR = "/tmp/temp_uploads" if os.getenv("VERCEL") == "1" else "temp_uploads"
 os.makedirs(TEMP_UPLOADS_DIR, exist_ok=True)
 
 

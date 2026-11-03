@@ -1,9 +1,17 @@
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
+
+// Vercel-deploy branch only: Vercel serverless functions can only write to
+// /tmp, and the bundled uploads/ directory does not exist at runtime —
+// multer to 'uploads/' fails with ENOENT (the exact error seen on deployment).
+// Locally (VERCEL unset) behaviour is unchanged.
+const uploadDir = process.env.VERCEL === '1' ? '/tmp/uploads' : 'uploads/';
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
