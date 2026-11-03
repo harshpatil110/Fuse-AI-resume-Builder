@@ -435,16 +435,29 @@ function FormEditor({ resume, setResume, onExport, isExporting }) {
 // Renders whatever shape the backend actually extracted: a raw string, the
 // LaTeX section dictionary, or a generic object of text fields. Never falls
 // back to placeholder data.
+function restoreLinkPlaceholders(text, linkMap) {
+  if (typeof text !== 'string') return text;
+  if (!linkMap || typeof linkMap !== 'object') {
+    return text.replace(/\[\[LINK_\d+\]\]/g, '');
+  }
+  return text.replace(/\[\[LINK_(\d+)\]\]/g, (match) => {
+    return linkMap[match] || match;
+  });
+}
+
 function renderResumeContent(parsedResume) {
   if (parsedResume === null || parsedResume === undefined || parsedResume === '') {
     return <p className="text-stone-500 italic">No original resume text could be extracted.</p>;
   }
 
+  const linkMap =
+    (typeof parsedResume === 'object' && (parsedResume.link_placeholders || parsedResume.link_map)) || {};
+
   // Pure string (raw .tex source, raw_text, or location.state.resume_text).
   if (typeof parsedResume === 'string') {
     return (
       <div className="whitespace-pre-wrap font-mono text-xs text-stone-700">
-        {parsedResume}
+        {restoreLinkPlaceholders(parsedResume, linkMap)}
       </div>
     );
   }
@@ -458,7 +471,9 @@ function renderResumeContent(parsedResume) {
       <div className="whitespace-pre-wrap text-sm text-stone-700">
         {parsedResume.map((item, i) => (
           <div key={i} className="mb-4">
-            {typeof item === 'string' ? item : JSON.stringify(item, null, 2)}
+            {typeof item === 'string'
+              ? restoreLinkPlaceholders(item, linkMap)
+              : JSON.stringify(item, null, 2)}
           </div>
         ))}
       </div>
@@ -495,14 +510,19 @@ function renderResumeContent(parsedResume) {
     return <p className="text-stone-500 italic">No original resume text could be extracted.</p>;
   }
 
-  return entries.map(([section, content], index) => (
-    <div key={`${section}-${index}`} className="mb-6">
-      <h3 className="text-xs font-bold uppercase tracking-widest text-stone-900 mb-2">
-        {section === '__contact_header__' ? 'Contact' : section}
-      </h3>
-      <div className="whitespace-pre-wrap text-sm text-stone-700">{content}</div>
-    </div>
-  ));
+  return entries.map(([section, content], index) => {
+    const displayContent = typeof content === 'string'
+      ? restoreLinkPlaceholders(content, linkMap)
+      : content;
+    return (
+      <div key={`${section}-${index}`} className="mb-6">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-stone-900 mb-2">
+          {section === '__contact_header__' ? 'Contact' : section}
+        </h3>
+        <div className="whitespace-pre-wrap text-sm text-stone-700">{displayContent}</div>
+      </div>
+    );
+  });
 }
 
 // ── Component ──
@@ -547,16 +567,23 @@ export default function Editor() {
       location.state?.jd;
 
     const criticFeedback =
+      criticData?.critique ||
       criticData?.critic_feedback ||
       criticData?.criticFeedback ||
-      criticData?.criticData ||
-      criticData;
+      null;
 
     if (!parsedResume || !jdText) {
       console.error('Missing required fields for rewrite:', { parsedResume, jdText });
       setErrorMessage('Missing resume or job description data. Please re-upload your resume to continue.');
       return;
     }
+
+    const rawTex =
+      parsedResume?.raw_tex ||
+      parsedResume?.rawTex ||
+      criticData?.tex_template ||
+      location.state?.raw_tex ||
+      null;
 
     setIsRewriting(true);
     setErrorMessage(null);
@@ -565,13 +592,13 @@ export default function Editor() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 600000);
     try {
-      console.log('📤 REWRITE PAYLOAD BEING SENT:', { parsedResume, jdText, criticFeedback });
+      console.log('📤 REWRITE PAYLOAD BEING SENT:', { parsedResume, rawTex, jdText, criticFeedback });
       const response = await fetch('http://localhost:5000/api/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          criticData,
           parsedResume,
+          rawTex,
           jdText,
           criticFeedback,
         }),

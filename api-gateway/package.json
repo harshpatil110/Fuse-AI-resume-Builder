@@ -2,13 +2,15 @@
   "name": "api-gateway",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "generate": "drizzle-kit generate",
     "push": "drizzle-kit push",
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "predev": "node src/utils/freePort.js",
+    "dev": "nodemon src/index.js",
+    "free-port": "node src/utils/freePort.js"
   },
   "keywords": [],
   "author": "",

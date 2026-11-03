@@ -20,6 +20,7 @@ router.post('/rewrite', async (req, res) => {
 
     // Accept both snake_case and camelCase field names from the frontend.
     const parsedResume = body.parsedResume || body.parsed_resume || body.resume;
+    const rawTex = body.rawTex || body.raw_tex;
     const jdText =
       body.jdText ||
       body.jd_text ||
@@ -39,6 +40,8 @@ router.post('/rewrite', async (req, res) => {
         selected_github_projects: Array.isArray(selected_github_projects)
           ? selected_github_projects
           : [],
+        raw_tex: rawTex || null,
+        critic_feedback: criticFeedback || null,
       },
       // The multi-agent LLM workflow (Writer + QA loop, possibly on a large
       // model) can take minutes. 10 minutes gives the QA loop room to finish

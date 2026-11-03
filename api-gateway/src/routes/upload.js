@@ -43,6 +43,8 @@ router.post('/upload', (req, res) => {
       // Step 1: Parse the resume PDF via Python Engine
       const processResponse = await axios.post('http://localhost:8000/process-resume', formData, {
         headers: formData.getHeaders(),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
       });
 
       const extractedData = processResponse.data.extracted_data;
@@ -51,6 +53,9 @@ router.post('/upload', (req, res) => {
       const criticResponse = await axios.post('http://localhost:8000/api/criticize', {
         resume_data: extractedData,
         jd_text: jdText || 'Job description provided via file',
+      }, {
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
       });
 
       // Step 2.5: For LaTeX resumes, keep the raw .tex template so the Editor can

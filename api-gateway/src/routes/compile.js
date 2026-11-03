@@ -31,7 +31,12 @@ router.post('/compile', async (req, res) => {
         github_repos: body.github_repos || [],
         jd_text: body.jd_text || '',
       },
-      { responseType: 'arraybuffer', timeout: 180000 }
+      {
+        responseType: 'arraybuffer',
+        timeout: 180000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
     );
 
     const pdfBuffer = Buffer.from(aiResponse.data);
